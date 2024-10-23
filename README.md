@@ -10,16 +10,11 @@ A JavaScript-based cloth simulation using Verlet integration and constraints, re
 
 # Controls
 
-| Command          | Action     |
-|------------------|------------|
-| **Left click**   | Move view  |
-| **Middle Click** | Zoom       |
-| **Right click**  | Move cloth |
-| **Middle click** | Cut cloth  |
-|                  |            |      |
-| **Right click**  | Move cloth |
-| **Middle click** | Cut cloth  |
-|                  |            |
+| Command          | Action         |
+|------------------|----------------|
+| **Left click**   | Drag cloth     |
+| **Middle Click** | High grav mode |
+| **Right click**  | Cut cloth      |
 
 ## Installation
 
