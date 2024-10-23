@@ -2,7 +2,7 @@
 
 A JavaScript-based cloth simulation using Verlet integration and constraints, rendered with [PixiJS](https://pixijs.com/).
 
-![Cloth Simulation Screenshot](path/to/your/screenshot.png)
+![Cloth Simulation Screenshot](https://github.com/Ryan-Axtell-abc/verlet-cloth-sim/blob/main/assets/screenshot.png)
 
 ## Demo
 
