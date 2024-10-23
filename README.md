@@ -6,7 +6,7 @@ A JavaScript-based cloth simulation using Verlet integration and constraints, re
 
 ## Demo
 
-[Live Demo Link](https://your-demo-link.com)
+[Live Demo Link](https://fabric.ryanaxtell.dev/)
 
 # Controls
 
@@ -26,14 +26,14 @@ A JavaScript-based cloth simulation using Verlet integration and constraints, re
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/Ryan-Axtell-abc/verlet-cloth-sim.git
+cd verlet-cloth-sim
 ```
 
 ### Install Dependencies
 
 ```bash
-npm install
+npm install pixi.js stats.js
 ```
 
 ## Usage
