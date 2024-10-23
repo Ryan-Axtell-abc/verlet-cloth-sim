@@ -78,7 +78,18 @@ export function update_drawn_particles(globals) {
 export function updatePhysics(globals, constants, dt) {
     // Update positions
     for (let vertex of globals.vertex_holder) {
-        if (!vertex.fixed && !vertex.grabbed) {
+        if (vertex.fixed) {
+            vertex.prev_x = vertex.x;
+            vertex.prev_y = vertex.y;
+            
+        } else if (vertex.grabbed) {
+            vertex.prev_x = vertex.x;
+            vertex.prev_y = vertex.y;
+
+            vertex.x = (globals.mouse_position.x-globals.render_offset_x)/globals.render_scale;
+            vertex.y = (globals.mouse_position.y-globals.render_offset_y)/globals.render_scale;
+
+        } else {
             const vx = (vertex.x - vertex.prev_x) * constants.DRAG;
             const vy = (vertex.y - vertex.prev_y) * constants.DRAG + constants.GRAVITY * globals.grav_modifier * dt * dt;
 
@@ -86,10 +97,6 @@ export function updatePhysics(globals, constants, dt) {
             vertex.prev_y = vertex.y;
             vertex.x += vx;
             vertex.y += vy;
-        } else if (vertex.grabbed) {
-            vertex.x = (globals.mouse_position.x-globals.render_offset_x)/globals.render_scale;
-            vertex.y = (globals.mouse_position.y-globals.render_offset_y)/globals.render_scale;
-
         }
     }
 
