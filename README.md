@@ -33,7 +33,7 @@ cd verlet-cloth-sim
 ### Install Dependencies
 
 ```bash
-npm install pixi.js stats.js
+npm install
 ```
 
 ## Usage
@@ -41,15 +41,15 @@ npm install pixi.js stats.js
 ### Running the Simulation
 
 ```bash
-npm start
+npx vite
 ```
 
-Open your web browser and navigate to `http://localhost:3000` to view the simulation.
+Open your web browser and navigate to `http://localhost:5173` to view the simulation.
 
 ### Building for Production
 
 ```bash
-npm run build
+npx vite build
 ```
 
 The production-ready files will be in the `dist/` directory.
