@@ -1,0 +1,5 @@
+# This directory is a Syncthing folder marker.
+# Do not delete.
+
+folderID: ywpsm-mknjh
+created: 2024-10-23T00:27:16-07:00

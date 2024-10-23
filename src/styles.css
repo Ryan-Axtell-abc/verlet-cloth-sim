@@ -1,5 +1,5 @@
 body {
-    background: url('assets/dot-background.svg');
+    background: url('/assets/dot-background.svg');
     overflow: clip;
     margin: 0;
     background-color: #fafafa;
@@ -11,12 +11,12 @@ body {
 
 @font-face {
     font-family: custom-heavy;
-    src: url('assets/fonts/shin-go/AOTFShinGoProBold.otf');
+    src: url('/assets/fonts/shin-go/AOTFShinGoProBold.otf');
 }
 
 @font-face {
     font-family: custom-normal;
-    src: url('assets/fonts/shin-go/AOTFShinGoProMedium.otf');
+    src: url('/assets/fonts/shin-go/AOTFShinGoProMedium.otf');
 }
 
 #menu-holder {
