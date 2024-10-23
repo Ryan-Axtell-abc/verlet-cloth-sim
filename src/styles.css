@@ -1,21 +1,3 @@
-/*body {
-    display: flex;
-    flex-direction: row;
-    font-family: testfont;
-}
-
-
-#main-view {
-    width: 100%;
-    height: 100%;
-}
-
-body {
-    font-family: Arial, Helvetica, sans-serif;
-}
-
-*/
-
 body {
     background: url('assets/dot-background.svg');
     overflow: clip;
@@ -29,15 +11,12 @@ body {
 
 @font-face {
     font-family: custom-heavy;
-    src: url(assets/fonts/shin-go/AOTFShinGoProBold.otf);
-    /*
-    src: url(assets/fonts/FOT-YurukaStd-UB.otf);
-    */
+    src: url('assets/fonts/shin-go/AOTFShinGoProBold.otf');
 }
 
 @font-face {
     font-family: custom-normal;
-    src: url(assets/fonts/shin-go/AOTFShinGoProMedium.otf);
+    src: url('assets/fonts/shin-go/AOTFShinGoProMedium.otf');
 }
 
 #menu-holder {
