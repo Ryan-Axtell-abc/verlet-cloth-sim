@@ -1,5 +1,5 @@
 node_modules/
-.stfolder
+.st*
 .env
 dist/
 build/
