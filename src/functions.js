@@ -78,7 +78,7 @@ export function update_drawn_particles(globals) {
 export function updatePhysics(globals, constants, dt) {
     // Update positions
     for (let vertex of globals.vertex_holder) {
-        if (vertex.fixed) {
+        if (vertex.fixed && !vertex.grabbed) {
             vertex.prev_x = vertex.x;
             vertex.prev_y = vertex.y;
             
