@@ -177,6 +177,8 @@ export function updatePhysics(globals, constants, dt) {
 
 
 export function setup(globals, app, width, height, pin_number) {
+    width = Math.min(width, 250)
+    height = Math.min(height, 250)
 
     if (globals.all_lines_graphics != undefined) {
         globals.all_lines_graphics.destroy();
@@ -464,12 +466,26 @@ export function set_up_event_listeners (globals, elements, constants, app) {
         }
     });
 
+    function threshold_input_field(){
+
+        if (elements.columns_input.value > 250) {
+            elements.columns_input.value = 250
+        }
+        if (elements.rows_input.value > 250) {
+            elements.rows_input.value = 250
+        }
+        if (elements.pins_input.value > 250) {
+            elements.pins_input.value = 250
+        }
+    }
+
     elements.columns_input.onkeydown = function(event){
         if(event.key === 'Enter'){
             let columns = parseInt(elements.columns_input.value);
             let rows = parseInt(elements.rows_input.value);
             let pins = parseInt(elements.pins_input.value);
             setup(globals, app, columns, rows, pins);
+            threshold_input_field()
         }
     };
 
@@ -479,6 +495,7 @@ export function set_up_event_listeners (globals, elements, constants, app) {
             let rows = parseInt(elements.rows_input.value);
             let pins = parseInt(elements.pins_input.value);
             setup(globals, app, columns, rows, pins);
+            threshold_input_field()
         }
     };
 
@@ -488,6 +505,7 @@ export function set_up_event_listeners (globals, elements, constants, app) {
             let rows = parseInt(elements.rows_input.value);
             let pins = parseInt(elements.pins_input.value);
             setup(globals, app, columns, rows, pins);
+            threshold_input_field()
         }
     };
 
