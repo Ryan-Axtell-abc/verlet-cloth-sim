@@ -41,6 +41,8 @@ export class Globals {
         this.drag_button = 0;
         this.grav_button = 1;
         this.cut_button = 2;
+
+        this.menu_open = true;
 	}
 }
 
@@ -58,9 +60,10 @@ export class Elements {
         this.build_button = document.getElementById("build-button");
         this.menu_toggle_button = document.getElementById("menu-toggle-button");
         this.menu_holder = document.getElementById("menu-holder");
+        this.menu_items_holder_wrapper = document.getElementById("menu-items-holder-wrapper");
         this.constraint_itterations_input = document.getElementById("constraint-itterations-input");
-        this.up_arrow = document.getElementById("up-arrow");
-        this.down_arrow = document.getElementById("down-arrow");
+        this.close_arrow = document.getElementById("close-arrow");
+        this.open_arrow = document.getElementById("open-arrow");
         this.fps_counter;
         this.show_fps_checkbox = document.getElementById("show-fps-checkbox");
         this.drag_button_selection_dropdown = document.getElementById("drag-button-selection-dropdown");
