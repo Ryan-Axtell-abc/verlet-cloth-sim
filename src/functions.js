@@ -326,18 +326,37 @@ export function set_up_event_listeners (globals, elements, constants, app) {
 
     });
 
+    function set_menu_open(should_open) {
+        if (should_open) {
+            // Remove hide-menu class from menu holder, which will show the menu
+            elements.menu_items_holder_wrapper.classList.remove("hide-menu");
+
+            // Switch the arrow from the open direction to the close direction
+            // This is to ready the arrow to close the menu as the next action
+            // Adds hidden, hiding the open_arrow
+            elements.open_arrow.classList.add("hidden");
+            // Removes hidden, showing the close_arrow
+            elements.close_arrow.classList.remove("hidden");
+        } else {
+            // Adds hide-menu class from menu holder, which will hide the menu
+            elements.menu_items_holder_wrapper.classList.add("hide-menu");
+
+            // Switch the arrow from the close direction to the open direction
+            // This is to ready the arrow to open the menu as the next action
+            // Removes hidden, showing the open_arrow
+            elements.open_arrow.classList.remove("hidden");
+            // Adds hidden, hiding the close_arrow
+            elements.close_arrow.classList.add("hidden");
+        }
+    }
+
 
     elements.menu_toggle_button.onclick = function() {
-        if (elements.menu_holder.classList.contains("hide-menu")) {
-            elements.menu_holder.classList.remove("hide-menu");
-            elements.up_arrow.classList.remove("hidden");
-            elements.down_arrow.classList.add("hidden");
 
-        } else {
-            elements.menu_holder.classList.add("hide-menu");
-            elements.up_arrow.classList.add("hidden");
-            elements.down_arrow.classList.remove("hidden");
-        }
+        globals.menu_open = !globals.menu_open;
+        set_menu_open(globals.menu_open);
+
+        
     };
 
 
@@ -367,7 +386,6 @@ export function set_up_event_listeners (globals, elements, constants, app) {
             globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: 1  });
         } else {
             globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: Math.max(parseInt(globals.line_length/8), 1)  });
-
         }
     });
 
