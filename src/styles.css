@@ -501,6 +501,7 @@ body {
 	transition: var(--speed);
 	transition: none;
 	box-shadow: inset var(--shadow);
+	border-radius: calc(infinity * 1px);
 }
   
 .slider:before {
@@ -518,6 +519,7 @@ body {
 	transition: var(--speed);
 	transition: none;
 	box-shadow: var(--shadow);
+	border-radius: calc(infinity * 1px);
 }
   
 input:checked + .slider {
@@ -530,13 +532,4 @@ input:checked + .slider:before {
 	-webkit-transform: translateX(var(--offset));
 	-ms-transform: translateX(var(--offset));
 	transform: translateX(var(--offset));
-}
-  
-  /* Rounded sliders */
-.slider.round {
-	border-radius: calc(infinity * 1px);
-}
-  
-.slider.round:before {
-	border-radius: calc(infinity * 1px);
 }
