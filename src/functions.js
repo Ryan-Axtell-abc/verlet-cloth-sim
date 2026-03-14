@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite } from "pixi.js";
+import { Container, Graphics, Sprite, Particle, ParticleContainer } from "pixi.js";
 
 export function create_fps_counter() {
 	var script=document.createElement('script');
@@ -17,12 +17,13 @@ export function draw_lines(globals) {
     globals.all_lines_graphics.clear();
     globals.all_lines_graphics.beginPath();
 
-    for (let line of globals.line_holder) {
+    for (let i = 0; i < globals.line_count; i++) {
+        const line = globals.line_holder[i];
         const vertice_1 = globals.vertex_holder[line.point_index_1];
         const vertice_2 = globals.vertex_holder[line.point_index_2];
 
-        globals.all_lines_graphics.moveTo(vertice_1.x*globals.render_scale +globals.render_offset_x, vertice_1.y*globals.render_scale +globals.render_offset_y);
-        globals.all_lines_graphics.lineTo(vertice_2.x*globals.render_scale +globals.render_offset_x, vertice_2.y*globals.render_scale +globals.render_offset_y);
+        globals.all_lines_graphics.moveTo(vertice_1.x, vertice_1.y);
+        globals.all_lines_graphics.lineTo(vertice_2.x, vertice_2.y);
     }
     globals.all_lines_graphics.stroke();
 }
@@ -43,18 +44,20 @@ export function createCircleTexture(app, radius) {
 }
 
 export function set_render_offsets_and_scale(globals) {
-
-    //I want to just scale for horizontal
     globals.render_offset_y = 100
 
-    if ( window.innerWidth < 1040 ) {
+    if (window.innerWidth < 1040) {
         globals.render_offset_x = 20
-        globals.render_scale = (window.innerWidth - 40)/1000
+        globals.render_scale = (window.innerWidth - 40) / 1000
     } else {
         globals.render_scale = 1
-        globals.render_offset_x = Math.floor((window.innerWidth-1000)/2)
+        globals.render_offset_x = Math.floor((window.innerWidth - 1000) / 2)
     }
-    
+
+    if (globals.sim_container) {
+        globals.sim_container.position.set(globals.render_offset_x, globals.render_offset_y);
+        globals.sim_container.scale.set(globals.render_scale);
+    }
 }
 
 function ccw(A,B,C) {
@@ -69,9 +72,10 @@ export function intersect(A,B,C,D) {
 
 export function update_drawn_particles(globals) {
     for (let i = 0; i < globals.vertex_holder.length; i++) {
-        let vertex = globals.vertex_holder[i];
-        let particle = globals.particle_holder[i];
-        particle.position.set(vertex.x*globals.render_scale +globals.render_offset_x, vertex.y*globals.render_scale +globals.render_offset_y);
+        const vertex = globals.vertex_holder[i];
+        const particle = globals.particle_holder[i];
+        particle.x = vertex.x;
+        particle.y = vertex.y;
     }
 }
 
@@ -102,37 +106,42 @@ export function updatePhysics(globals, constants, dt) {
 
     // Solve constraints
     for (let f = 0; f < globals.constraint_itterations; f++) {
+    for (let i = 0; i < globals.line_count; i++) {
+        const line = globals.line_holder[i];
+        const vertice_1 = globals.vertex_holder[line.point_index_1];
+        const vertice_2 = globals.vertex_holder[line.point_index_2];
 
-        //console.log("globals.line_holder:", globals.line_holder)
-        for (let line of globals.line_holder) {
-            const vertice_1 = globals.vertex_holder[line.point_index_1];
-            const vertice_2 = globals.vertex_holder[line.point_index_2];
+        const distance_x = vertice_2.x - vertice_1.x;
+        const distance_y = vertice_2.y - vertice_1.y;
+        const distance = Math.sqrt(distance_x * distance_x + distance_y * distance_y);
+        const difference = (line.length - distance) / distance;
 
-            const distance_x = vertice_2.x - vertice_1.x;
-            const distance_y = vertice_2.y - vertice_1.y;
-            const distance = Math.sqrt(distance_x**2 + distance_y**2);
-            const difference = (line.length - distance) / distance;
-            if (globals.tearing && distance/line.length > globals.tearing_ratio) {
-                globals.line_holder.delete(line);
-            }
+        if (globals.tearing && distance / line.length > globals.tearing_ratio) {
+            // Swap with last live element and shrink
+            globals.line_count--;
+            globals.line_holder[i] = globals.line_holder[globals.line_count];
+            i--; // re-check this index since it now holds a different line
+            continue;
+        }
 
-            const correction_x = distance_x * difference * 0.5;
-            const correction_y = distance_y * difference * 0.5;
+        const correction_x = distance_x * difference * 0.5;
+        const correction_y = distance_y * difference * 0.5;
 
-            if (!vertice_1.fixed && !vertice_1.grabbed) {
-                vertice_1.x -= correction_x * (1 - constants.DAMPING);
-                vertice_1.y -= correction_y * (1 - constants.DAMPING);
-            }
-            if (!vertice_2.fixed && !vertice_2.grabbed) {
-                vertice_2.x += correction_x * (1 - constants.DAMPING);
-                vertice_2.y += correction_y * (1 - constants.DAMPING);
-            }
+        if (!vertice_1.fixed && !vertice_1.grabbed) {
+            vertice_1.x -= correction_x * (1 - constants.DAMPING);
+            vertice_1.y -= correction_y * (1 - constants.DAMPING);
+        }
+        if (!vertice_2.fixed && !vertice_2.grabbed) {
+            vertice_2.x += correction_x * (1 - constants.DAMPING);
+            vertice_2.y += correction_y * (1 - constants.DAMPING);
         }
     }
+}
 
     if (globals.cut_mode) {
-        var chosen_line = null;
-        for (let line of globals.line_holder) {
+        var chosen_line_index = -1;
+        for (let i = 0; i < globals.line_count; i++) {
+    const line = globals.line_holder[i];
 
             const vertice_1 = globals.vertex_holder[line.point_index_1];
             const vertice_2 = globals.vertex_holder[line.point_index_2];
@@ -143,14 +152,15 @@ export function updatePhysics(globals, constants, dt) {
 
             const does_intersect = intersect(adjusted_mouse_position,mouse_bottom_point,vertice_1,vertice_2) || intersect(adjusted_mouse_position,mouse_right_point,vertice_1,vertice_2);
 
-            if (does_intersect) {
-                chosen_line = line;
-                break
-            }
+           if (does_intersect) {
+    chosen_line_index = i;
+    break;
+}
         }
-        if (chosen_line != null) {
-            globals.line_holder.delete(chosen_line)
-        }
+if (chosen_line_index !== -1) {
+    globals.line_count--;
+    globals.line_holder[chosen_line_index] = globals.line_holder[globals.line_count];
+}
     }
 
     if (globals.drag_mode) {
@@ -180,37 +190,43 @@ export function setup(globals, app, width, height, pin_number) {
     width = Math.min(width, 250)
     height = Math.min(height, 250)
 
-    if (globals.all_lines_graphics != undefined) {
-        globals.all_lines_graphics.destroy();
+if (globals.sim_container != null) {
+    if (globals.particle_container) {
+        globals.sim_container.removeChild(globals.particle_container);
+        globals.particle_container.removeParticles();
     }
-    if (globals.particle_container != undefined) {
-        globals.particle_container.destroy();
-    }
+    globals.sim_container.destroy({ children: true });
+}
 
     globals.vertex_holder = [];
-    globals.line_holder = new Set();
+    globals.line_holder = [];
+    globals.line_count = 0;
+
     globals.particle_holder = [];
+
+	globals.line_length = 1000/width;
+
     globals.all_lines_graphics = new Graphics();
 
-	globals.line_length = 1000/width
-    
-    if ( window.innerWidth < 800 ) {
-        globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: 1  });
-    } else {
-        globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: Math.max(parseInt(globals.line_length/8), 1)  });
+if (window.innerWidth < 800) {
+    globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: 1 });
+} else {
+    globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: Math.max(parseInt(globals.line_length / 8), 1) });
+}
 
-    }
-    app.stage.addChild(globals.all_lines_graphics);
-    
-
-    globals.particle_container = new Container(width * height, {
+globals.particle_container = new ParticleContainer({
+    dynamicProperties: {
         position: true,
         rotation: false,
-        uvs: false,
-        tint: true
-    });
+        color: false,
+        vertex: false,
+    },
+});
 
-    app.stage.addChild(globals.particle_container);
+globals.sim_container = new Container();
+globals.sim_container.addChild(globals.all_lines_graphics);
+globals.sim_container.addChild(globals.particle_container);
+app.stage.addChild(globals.sim_container);
 
 	var circle_graphic_radius = Math.max(parseInt(globals.line_length/6), 2) 
     var circleTexture = createCircleTexture(app, circle_graphic_radius);
@@ -220,10 +236,14 @@ export function setup(globals, app, width, height, pin_number) {
 		let x = ((i%width)*globals.line_length);
 		let y = (Math.floor(i/width)*globals.line_length);
 
-        const particle = new Sprite(circleTexture);
-        particle.anchor.set(0.5);
-        particle.position.set(x, y);
-        globals.particle_container.addChild(particle);
+        const particle = new Particle({
+    texture: circleTexture,
+    x: x,
+    y: y,
+    anchorX: 0.5,
+    anchorY: 0.5,
+});
+globals.particle_container.addParticle(particle);
 
         globals.particle_holder.push(particle);
 
@@ -251,7 +271,8 @@ export function setup(globals, app, width, height, pin_number) {
 			length : globals.line_length,
 		}
 		
-		globals.line_holder.add(line);
+		globals.line_holder[globals.line_count] = line;
+        globals.line_count++;
 	}
 
     var total_column_lines = (height-1)*width;
@@ -267,7 +288,8 @@ export function setup(globals, app, width, height, pin_number) {
 			length : globals.line_length,
 		}
 		
-		globals.line_holder.add(line);
+		globals.line_holder[globals.line_count] = line;
+        globals.line_count++;
 	}
 
 	for (let i = 0; i < pin_number-1; i++) {
@@ -425,11 +447,12 @@ export function set_up_event_listeners (globals, elements, constants, app) {
         globals.tearing_ratio = this.value;
     });
 
-    elements.columns_input.value = constants.DEFAULT_COLUMNS;
+    elements.columns_input.value = window.innerWidth < 800 ? constants.DEFAULT_COLUMNS_MOBILE : constants.DEFAULT_COLUMNS;
 
-    elements.rows_input.value = constants.DEFAULT_ROWS;
+    elements.rows_input.value = window.innerWidth < 800 ? constants.DEFAULT_ROWS_MOBILE : constants.DEFAULT_ROWS;
 
-    elements.pins_input.value = constants.DEFAULT_PINS;
+    elements.pins_input.value = window.innerWidth < 800 ? constants.DEFAULT_PINS_MOBILE : constants.DEFAULT_PINS;
+
 
     elements.build_button.onclick = function() {
         let columns = parseInt(elements.columns_input.value);
@@ -438,7 +461,7 @@ export function set_up_event_listeners (globals, elements, constants, app) {
         setup(globals, app, columns, rows, pins);
     };
 
-    elements.constraint_itterations_input.value = 10;
+    elements.constraint_itterations_input.value = window.innerWidth < 800 ? 8 : 10;
     elements.constraint_itterations_input.addEventListener('change', function() {
         globals.constraint_itterations = this.value;
     });

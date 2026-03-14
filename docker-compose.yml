@@ -1,0 +1,6 @@
+services:
+  cloth-sim:
+    build: .
+    ports:
+      - "127.0.0.1:8094:80"
+    restart: unless-stopped

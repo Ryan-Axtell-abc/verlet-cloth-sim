@@ -8,15 +8,19 @@ export class Constants {
 		this.GRAVITY = 980;
 		this.FIXED_TIME_STEP = 1/60;
                 this.DEFAULT_COLUMNS = 60;
+                this.DEFAULT_COLUMNS_MOBILE = 40;
                 this.DEFAULT_ROWS = 30;
+                this.DEFAULT_ROWS_MOBILE = 30;
                 this.DEFAULT_PINS = 7;
+                this.DEFAULT_PINS_MOBILE = 5;
 	}
 }
 
 export class Globals {
 	constructor() {
         this.vertex_holder = [];
-        this.line_holder = new Set();
+        this.line_holder = [];
+        this.line_count = 0;
         this.particle_holder = [];
         this.all_lines_graphics = new Graphics();
         this.particle_container;
@@ -43,6 +47,22 @@ export class Globals {
         this.cut_button = 2;
 
         this.menu_open = true;
+
+        this.sim_container = null;
+
+        this.perf = {
+                physics: 0,
+                particles: 0,
+                lines: 0,
+                total: 0,
+                samples: [],
+                sample_index: 0,
+                sample_count: 360,  // rolling window of 60 frames
+        };
+
+        for (let i = 0; i < this.perf.sample_count; i++) {
+                this.perf.samples.push({ physics: 0, particles: 0, lines: 0, total: 0 });
+        }
 	}
 }
 
