@@ -8,9 +8,9 @@ export class Constants {
 		this.GRAVITY = 980;
 		this.FIXED_TIME_STEP = 1 / 60;
 		this.DEFAULT_COLUMNS = 60;
-		this.DEFAULT_COLUMNS_MOBILE = 50;
+		this.DEFAULT_COLUMNS_MOBILE = 40;
 		this.DEFAULT_ROWS = 30;
-		this.DEFAULT_ROWS_MOBILE = 40;
+		this.DEFAULT_ROWS_MOBILE = 30;
 		this.DEFAULT_PINS = 7;
 		this.DEFAULT_PINS_MOBILE = 5;
 		this.GRAB_RADIUS = 20;
