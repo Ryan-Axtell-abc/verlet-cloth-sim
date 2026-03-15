@@ -93,6 +93,7 @@ export class Elements {
 		this.open_arrow = document.getElementById("open-arrow");
 		this.fps_counter;
 		this.show_fps_checkbox = document.getElementById("show-fps-checkbox");
+		this.show_perf_checkbox = document.getElementById("show-perf-checkbox");
 		this.drag_button_selection_dropdown = document.getElementById("drag-button-selection-dropdown");
 		this.grav_button_selection_dropdown = document.getElementById("grav-button-selection-dropdown");
 		this.cut_button_selection_dropdown = document.getElementById("cut-button-selection-dropdown");

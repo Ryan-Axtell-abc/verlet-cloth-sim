@@ -540,7 +540,7 @@ input:checked + .slider:before {
     padding: 6px 10px;
     border-radius: 6px;
     white-space: pre;
-    display: block;
+    display: none;
 }
 
 #cloth-sim-holder *{

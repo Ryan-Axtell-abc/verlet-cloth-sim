@@ -475,6 +475,15 @@ export function set_up_event_listeners(globals, elements, constants, app) {
 		}
 	});
 
+	elements.show_perf_checkbox.addEventListener('change', function () {
+		const perfOverlay = document.getElementById("perf-overlay");
+		if (this.checked) {
+			perfOverlay.style.display = "block";
+		} else {
+			perfOverlay.style.display = "none";
+		}
+	});
+
 	elements.cut_button_selection_dropdown.addEventListener('change', function () {
 		//console.log("cut_button_selection_dropdown:", this.value)
 		if (this.value == "left-click") {

@@ -36,8 +36,7 @@ let accumulator = 0;
 
 	const perfText = document.getElementById("perf-text");
 	const perfOverlay = document.getElementById("perf-overlay");
-	perfOverlay.style.display = "block"; // remove this line when you add a proper toggle
-
+	
 	app.ticker.add((time) => {
 		if (running_setup) {
 			if (document.getElementById("fps-counter-element") != undefined && document.getElementById("fps-counter-element") != null) {
