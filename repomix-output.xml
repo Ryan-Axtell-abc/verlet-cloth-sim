@@ -40,6 +40,9 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
+.github/
+  workflows/
+    deploy.yml
 assets/
   fonts/
     shin-go/
@@ -68,8 +71,12 @@ src/
   functions.js
   index.js
   styles.css
+.dockerignore
 .gitignore
+docker-compose.yml
+Dockerfile
 index.html
+nginx.conf
 package.json
 README.md
 robots.txt
@@ -77,6 +84,35 @@ robots.txt
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path=".github/workflows/deploy.yml">
+name: Deploy Cloth Sim
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /var/www/html/verlet-cloth-sim
+            git pull origin main
+            docker compose down
+            docker compose up --build -d
+            docker image prune -f
+            echo "✅ Deployment complete!"
+</file>
 
 <file path="assets/dot-background.svg">
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='16' height='16' fill='none'><circle fill='rgb(0 0 0 / 0.2)' id='pattern-circle' cx='10' cy='10' r='1.6257413380501518'></circle></svg>
@@ -112,63 +148,62 @@ This section contains the contents of the repository's files.
 </svg>
 </file>
 
-<file path="src/index.js">
-import { Application, Container, Graphics, Sprite, autoDetectRenderer } from 'pixi.js';
-import { Constants, Elements, Globals } from './classes.js'
-import { draw_lines, hide_element, show_element, update_drawn_particles, updatePhysics, setup, set_up_event_listeners, create_fps_counter,  } from './functions.js'
+<file path=".dockerignore">
+node_modules
+dist
+build
+.git
+*.log
+.env
+.DS_Store
+</file>
 
-const constants = new Constants();
-const globals = new Globals();
-const elements = new Elements();
+<file path="docker-compose.yml">
+services:
+  cloth-sim:
+    build: .
+    ports:
+      - "127.0.0.1:8094:80"
+    restart: unless-stopped
+</file>
 
-// Create a PixiJS application.
-const app = new Application();
+<file path="Dockerfile">
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci
+COPY . .
+RUN npx vite build
 
-let accumulator = 0;
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+</file>
 
-// Asynchronous IIFE
-(async () =>
-{
-    // Intialize the application.
-    await app.init({
-        backgroundAlpha: 0,
-        resizeTo: window,
-        antialias: true,
-    });
+<file path="nginx.conf">
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
 
+    # Gzip - big win for JS bundles on mobile
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 256;
 
-    elements.cloth_sim_holder.appendChild(app.canvas);
-    set_up_event_listeners(globals, elements, constants, app);
+    # Vite hashed assets get long cache
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
 
-    setup(globals, app, constants.DEFAULT_COLUMNS, constants.DEFAULT_ROWS, constants.DEFAULT_PINS);
-    create_fps_counter();
-    var running_setup = true;
-
-    app.ticker.add((time) =>
-    {
-        if (running_setup) {
-				if ( document.getElementById("fps-counter-element") != undefined && document.getElementById("fps-counter-element") != null) {
-					//console.log("Done")
-                    elements.fps_counter = document.getElementById("fps-counter-element");
-                    elements.fps_counter.classList.add('hidden');
-                    running_setup = false
-				}
-        } else {
-            accumulator += time.deltaTime / 60; // Convert to seconds
-
-            // Perform fixed time step updates
-            while (accumulator >= constants.FIXED_TIME_STEP) {
-                updatePhysics(globals, constants, constants.FIXED_TIME_STEP);
-                accumulator -= constants.FIXED_TIME_STEP;
-            }
-
-            update_drawn_particles(globals);
-            draw_lines(globals);
-
-            
-        }
-    });
-})();
+    # Everything else - no cache so deployments take effect immediately
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+    }
+}
 </file>
 
 <file path="robots.txt">
@@ -197,80 +232,99 @@ User-agent: YandexBot
 Disallow: /
 </file>
 
-<file path="src/classes.js">
-import { Graphics } from 'pixi.js';
+<file path="src/index.js">
+import { Application, Container, Graphics, Sprite, autoDetectRenderer } from 'pixi.js';
+import { Constants, Elements, Globals } from './classes.js'
+import { draw_lines, hide_element, show_element, update_drawn_particles, updatePhysics, setup, set_up_event_listeners, create_fps_counter, } from './functions.js'
+
+const constants = new Constants();
+const globals = new Globals();
+const elements = new Elements();
+
+// Create a PixiJS application.
+const app = new Application();
+
+let accumulator = 0;
+
+// Asynchronous IIFE
+(async () => {
+	// Intialize the application.
+	await app.init({
+		backgroundAlpha: 0,
+		resizeTo: window,
+		antialias: true,
+	});
 
 
-export class Constants {
-	constructor() {
-		this.DAMPING = .03;
-		this.DRAG = .995;
-		this.GRAVITY = 980;
-		this.FIXED_TIME_STEP = 1/60;
-                this.DEFAULT_COLUMNS = 60;
-                this.DEFAULT_ROWS = 30;
-                this.DEFAULT_PINS = 7;
-	}
-}
+	elements.cloth_sim_holder.appendChild(app.canvas);
+	set_up_event_listeners(globals, elements, constants, app);
 
-export class Globals {
-	constructor() {
-        this.vertex_holder = [];
-        this.line_holder = new Set();
-        this.particle_holder = [];
-        this.all_lines_graphics = new Graphics();
-        this.particle_container;
-        this.render_offset_x = 100;
-        this.render_offset_y = 100;
-        this.render_scale = 1
+	const columns = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.DEFAULT_COLUMNS_MOBILE : constants.DEFAULT_COLUMNS;
+	const rows = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.DEFAULT_ROWS_MOBILE : constants.DEFAULT_ROWS;
+	const pins = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.DEFAULT_PINS_MOBILE : constants.DEFAULT_PINS;
+	setup(globals, app, constants, columns, rows, pins);
+	create_fps_counter();
+	var running_setup = true;
 
-        this.cut_mode = false;
-        this.drag_mode = false;
-        this.still_dragging = false;
-        this.chosen_dragging_vertex = null;
-        this.line_length;
-        this.mouse_position = {x:0, y:0};
+	const perfText = document.getElementById("perf-text");
+	const perfOverlay = document.getElementById("perf-overlay");
+	perfOverlay.style.display = "block"; // remove this line when you add a proper toggle
 
-        this.tearing = true;
-        this.tearing_ratio = 10;
+	app.ticker.add((time) => {
+		if (running_setup) {
+			if (document.getElementById("fps-counter-element") != undefined && document.getElementById("fps-counter-element") != null) {
+				elements.fps_counter = document.getElementById("fps-counter-element");
+				elements.fps_counter.classList.add('hidden');
+				running_setup = false;
+			}
+		} else {
+			accumulator += time.deltaTime / 60;
 
-        this.grav_modifier = 1;
+			const t0 = performance.now();
 
-        this.constraint_itterations = 8;
+			while (accumulator >= constants.FIXED_TIME_STEP) {
+				updatePhysics(globals, constants, constants.FIXED_TIME_STEP);
+				accumulator -= constants.FIXED_TIME_STEP;
+			}
 
-        this.drag_button = 0;
-        this.grav_button = 1;
-        this.cut_button = 2;
+			const t1 = performance.now();
+			update_drawn_particles(globals);
 
-        this.menu_open = true;
-	}
-}
+			const t2 = performance.now();
+			draw_lines(globals);
 
-export class Elements {
-	constructor() {
-        this.cloth_sim_holder = document.getElementById("cloth-sim-holder");
-        this.settings_overlay = document.getElementById("settings-overlay");
-        this.settings_close_button = document.getElementById("settings-close-button");
-        this.settings_open_button = document.getElementById("settings-open-button");
-        this.tearing_checkbox = document.getElementById("tearing-checkbox");
-        this.tearing_input = document.getElementById("tearing-input");
-        this.columns_input = document.getElementById("columns-input");
-        this.rows_input = document.getElementById("rows-input");
-        this.pins_input = document.getElementById("pins-input");
-        this.build_button = document.getElementById("build-button");
-        this.menu_toggle_button = document.getElementById("menu-toggle-button");
-        this.menu_holder = document.getElementById("menu-holder");
-        this.menu_items_holder_wrapper = document.getElementById("menu-items-holder-wrapper");
-        this.constraint_itterations_input = document.getElementById("constraint-itterations-input");
-        this.close_arrow = document.getElementById("close-arrow");
-        this.open_arrow = document.getElementById("open-arrow");
-        this.fps_counter;
-        this.show_fps_checkbox = document.getElementById("show-fps-checkbox");
-        this.drag_button_selection_dropdown = document.getElementById("drag-button-selection-dropdown");
-        this.grav_button_selection_dropdown = document.getElementById("grav-button-selection-dropdown");
-        this.cut_button_selection_dropdown = document.getElementById("cut-button-selection-dropdown");
-	}
-}
+			const t3 = performance.now();
+
+			// Store this frame's sample
+			const perf = globals.perf;
+			const sample = perf.samples[perf.sample_index];
+			sample.physics = t1 - t0;
+			sample.particles = t2 - t1;
+			sample.lines = t3 - t2;
+			sample.total = t3 - t0;
+
+			perf.sample_index = (perf.sample_index + 1) % perf.sample_count;
+
+			// Update display every 30 frames to avoid thrashing the DOM
+			if (perf.sample_index % 30 === 0) {
+				let sum_physics = 0, sum_particles = 0, sum_lines = 0, sum_total = 0;
+				for (let i = 0; i < perf.sample_count; i++) {
+					sum_physics += perf.samples[i].physics;
+					sum_particles += perf.samples[i].particles;
+					sum_lines += perf.samples[i].lines;
+					sum_total += perf.samples[i].total;
+				}
+				const n = perf.sample_count;
+				perfText.textContent =
+					`physics:   ${(sum_physics / n).toFixed(2)}ms\n` +
+					`particles: ${(sum_particles / n).toFixed(2)}ms\n` +
+					`lines:     ${(sum_lines / n).toFixed(2)}ms\n` +
+					`total:     ${(sum_total / n).toFixed(2)}ms`;
+			}
+		}
+	});
+
+})();
 </file>
 
 <file path="package.json">
@@ -285,6 +339,109 @@ export class Elements {
 }
 </file>
 
+<file path="src/classes.js">
+import { Graphics } from 'pixi.js';
+
+
+export class Constants {
+	constructor() {
+		this.DAMPING = .03;
+		this.DRAG = .995;
+		this.GRAVITY = 980;
+		this.FIXED_TIME_STEP = 1 / 60;
+		this.DEFAULT_COLUMNS = 60;
+		this.DEFAULT_COLUMNS_MOBILE = 40;
+		this.DEFAULT_ROWS = 30;
+		this.DEFAULT_ROWS_MOBILE = 30;
+		this.DEFAULT_PINS = 7;
+		this.DEFAULT_PINS_MOBILE = 5;
+		this.GRAB_RADIUS = 30;
+		this.GRAB_RADIUS_MOBILE = 60;
+		this.PARTICLE_RADIUS = 3;
+		this.PARTICLE_RADIUS_MOBILE = 2;
+		this.LINE_THICKNESS = 2;
+		this.LINE_THICKNESS_MOBILE = 1;
+		this.MOBILE_BREAKPOINT = 800;
+	}
+}
+
+export class Globals {
+	constructor() {
+		this.vertex_holder = [];
+		this.line_holder = [];
+		this.line_count = 0;
+		this.particle_holder = [];
+		this.all_lines_graphics = new Graphics();
+		this.particle_container;
+		this.render_offset_x = 100;
+		this.render_offset_y = 100;
+		this.render_scale = 1
+
+		this.cut_mode = false;
+		this.drag_mode = false;
+		this.still_dragging = false;
+		this.chosen_dragging_vertex = null;
+		this.line_length;
+		this.mouse_position = { x: 0, y: 0 };
+
+		this.tearing = true;
+		this.tearing_ratio = 10;
+
+		this.grav_modifier = 1;
+
+		this.constraint_itterations = 8;
+
+		this.drag_button = 0;
+		this.grav_button = 1;
+		this.cut_button = 2;
+
+		this.menu_open = true;
+
+		this.sim_container = null;
+
+		this.perf = {
+			physics: 0,
+			particles: 0,
+			lines: 0,
+			total: 0,
+			samples: [],
+			sample_index: 0,
+			sample_count: 360,  // rolling window of 60 frames
+		};
+
+		for (let i = 0; i < this.perf.sample_count; i++) {
+			this.perf.samples.push({ physics: 0, particles: 0, lines: 0, total: 0 });
+		}
+	}
+}
+
+export class Elements {
+	constructor() {
+		this.cloth_sim_holder = document.getElementById("cloth-sim-holder");
+		this.settings_overlay = document.getElementById("settings-overlay");
+		this.settings_close_button = document.getElementById("settings-close-button");
+		this.settings_open_button = document.getElementById("settings-open-button");
+		this.tearing_checkbox = document.getElementById("tearing-checkbox");
+		this.tearing_input = document.getElementById("tearing-input");
+		this.columns_input = document.getElementById("columns-input");
+		this.rows_input = document.getElementById("rows-input");
+		this.pins_input = document.getElementById("pins-input");
+		this.build_button = document.getElementById("build-button");
+		this.menu_toggle_button = document.getElementById("menu-toggle-button");
+		this.menu_holder = document.getElementById("menu-holder");
+		this.menu_items_holder_wrapper = document.getElementById("menu-items-holder-wrapper");
+		this.constraint_itterations_input = document.getElementById("constraint-itterations-input");
+		this.close_arrow = document.getElementById("close-arrow");
+		this.open_arrow = document.getElementById("open-arrow");
+		this.fps_counter;
+		this.show_fps_checkbox = document.getElementById("show-fps-checkbox");
+		this.drag_button_selection_dropdown = document.getElementById("drag-button-selection-dropdown");
+		this.grav_button_selection_dropdown = document.getElementById("grav-button-selection-dropdown");
+		this.cut_button_selection_dropdown = document.getElementById("cut-button-selection-dropdown");
+	}
+}
+</file>
+
 <file path=".gitignore">
 node_modules/
 .st*
@@ -295,534 +452,557 @@ build/
 </file>
 
 <file path="src/functions.js">
-import { Container, Graphics, Sprite } from "pixi.js";
+import { Container, Graphics, Sprite, Particle, ParticleContainer } from "pixi.js";
 
 export function create_fps_counter() {
-	var script=document.createElement('script');
-	script.onload=function(){var stats=new Stats();
+	var script = document.createElement('script');
+	script.onload = function () {
+		var stats = new Stats();
 		document.body.appendChild(stats.dom);
-		stats.dom.id='fps-counter-element'
-		requestAnimationFrame(function loop(){stats.update();
-			requestAnimationFrame(loop)});
+		stats.dom.id = 'fps-counter-element'
+		requestAnimationFrame(function loop() {
+			stats.update();
+			requestAnimationFrame(loop)
+		});
 	};
-	script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';
+	script.src = 'https://mrdoob.github.io/stats.js/build/stats.min.js';
 	document.head.appendChild(script);
 	//globals.loading_fps_counter
 }
 
 export function draw_lines(globals) {
-    globals.all_lines_graphics.clear();
-    globals.all_lines_graphics.beginPath();
+	globals.all_lines_graphics.clear();
+	globals.all_lines_graphics.beginPath();
 
-    for (let line of globals.line_holder) {
-        const vertice_1 = globals.vertex_holder[line.point_index_1];
-        const vertice_2 = globals.vertex_holder[line.point_index_2];
+	for (let i = 0; i < globals.line_count; i++) {
+		const line = globals.line_holder[i];
+		const vertice_1 = globals.vertex_holder[line.point_index_1];
+		const vertice_2 = globals.vertex_holder[line.point_index_2];
 
-        globals.all_lines_graphics.moveTo(vertice_1.x*globals.render_scale +globals.render_offset_x, vertice_1.y*globals.render_scale +globals.render_offset_y);
-        globals.all_lines_graphics.lineTo(vertice_2.x*globals.render_scale +globals.render_offset_x, vertice_2.y*globals.render_scale +globals.render_offset_y);
-    }
-    globals.all_lines_graphics.stroke();
+		globals.all_lines_graphics.moveTo(vertice_1.x, vertice_1.y);
+		globals.all_lines_graphics.lineTo(vertice_2.x, vertice_2.y);
+	}
+	globals.all_lines_graphics.stroke();
 }
 
 export function hide_element(element) {
-    element.classList.add('hidden');
+	element.classList.add('hidden');
 }
 
 export function show_element(element) {
-    element.classList.remove('hidden');
+	element.classList.remove('hidden');
 }
 
 export function createCircleTexture(app, radius) {
-    const graphics = new Graphics();
-    graphics.circle(0, 0, radius);
-    graphics.fill(0x000000);
-    return app.renderer.generateTexture(graphics);
+	const graphics = new Graphics();
+	graphics.circle(0, 0, radius);
+	graphics.fill(0x000000);
+	return app.renderer.generateTexture(graphics);
 }
 
 export function set_render_offsets_and_scale(globals) {
+	globals.render_offset_y = 100
 
-    //I want to just scale for horizontal
-    globals.render_offset_y = 100
+	if (window.innerWidth < 1040) {
+		globals.render_offset_x = 20
+		globals.render_scale = (window.innerWidth - 40) / 1000
+	} else {
+		globals.render_scale = 1
+		globals.render_offset_x = Math.floor((window.innerWidth - 1000) / 2)
+	}
 
-    if ( window.innerWidth < 1040 ) {
-        globals.render_offset_x = 20
-        globals.render_scale = (window.innerWidth - 40)/1000
-    } else {
-        globals.render_scale = 1
-        globals.render_offset_x = Math.floor((window.innerWidth-1000)/2)
-    }
-    
+	if (globals.sim_container) {
+		globals.sim_container.position.set(globals.render_offset_x, globals.render_offset_y);
+		globals.sim_container.scale.set(globals.render_scale);
+	}
 }
 
-function ccw(A,B,C) {
-    return (C.y-A.y) * (B.x-A.x) > (B.y-A.y) * (C.x-A.x);
+function ccw(A, B, C) {
+	return (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
 }
 
 // Return true if line segments AB and CD intersect
-export function intersect(A,B,C,D) {
-    return ccw(A,C,D) != ccw(B,C,D) && ccw(A,B,C) != ccw(A,B,D)
+export function intersect(A, B, C, D) {
+	return ccw(A, C, D) != ccw(B, C, D) && ccw(A, B, C) != ccw(A, B, D)
 }
 
 
 export function update_drawn_particles(globals) {
-    for (let i = 0; i < globals.vertex_holder.length; i++) {
-        let vertex = globals.vertex_holder[i];
-        let particle = globals.particle_holder[i];
-        particle.position.set(vertex.x*globals.render_scale +globals.render_offset_x, vertex.y*globals.render_scale +globals.render_offset_y);
-    }
+	for (let i = 0; i < globals.vertex_holder.length; i++) {
+		const vertex = globals.vertex_holder[i];
+		const particle = globals.particle_holder[i];
+		particle.x = vertex.x;
+		particle.y = vertex.y;
+	}
 }
 
 export function updatePhysics(globals, constants, dt) {
-    // Update positions
-    for (let vertex of globals.vertex_holder) {
-        if (vertex.fixed && !vertex.grabbed) {
-            vertex.prev_x = vertex.x;
-            vertex.prev_y = vertex.y;
-            
-        } else if (vertex.grabbed) {
-            vertex.prev_x = vertex.x;
-            vertex.prev_y = vertex.y;
+	// Update positions
+	for (let vertex of globals.vertex_holder) {
+		if (vertex.fixed && !vertex.grabbed) {
+			vertex.prev_x = vertex.x;
+			vertex.prev_y = vertex.y;
 
-            vertex.x = (globals.mouse_position.x-globals.render_offset_x)/globals.render_scale;
-            vertex.y = (globals.mouse_position.y-globals.render_offset_y)/globals.render_scale;
+		} else if (vertex.grabbed) {
+			vertex.prev_x = vertex.x;
+			vertex.prev_y = vertex.y;
 
-        } else {
-            const vx = (vertex.x - vertex.prev_x) * constants.DRAG;
-            const vy = (vertex.y - vertex.prev_y) * constants.DRAG + constants.GRAVITY * globals.grav_modifier * dt * dt;
+			vertex.x = (globals.mouse_position.x - globals.render_offset_x) / globals.render_scale;
+			vertex.y = (globals.mouse_position.y - globals.render_offset_y) / globals.render_scale;
 
-            vertex.prev_x = vertex.x;
-            vertex.prev_y = vertex.y;
-            vertex.x += vx;
-            vertex.y += vy;
-        }
-    }
+		} else {
+			const vx = (vertex.x - vertex.prev_x) * constants.DRAG;
+			const vy = (vertex.y - vertex.prev_y) * constants.DRAG + constants.GRAVITY * globals.grav_modifier * dt * dt;
 
-    // Solve constraints
-    for (let f = 0; f < globals.constraint_itterations; f++) {
+			vertex.prev_x = vertex.x;
+			vertex.prev_y = vertex.y;
+			vertex.x += vx;
+			vertex.y += vy;
+		}
+	}
 
-        //console.log("globals.line_holder:", globals.line_holder)
-        for (let line of globals.line_holder) {
-            const vertice_1 = globals.vertex_holder[line.point_index_1];
-            const vertice_2 = globals.vertex_holder[line.point_index_2];
+	// Solve constraints
+	for (let f = 0; f < globals.constraint_itterations; f++) {
+		for (let i = 0; i < globals.line_count; i++) {
+			const line = globals.line_holder[i];
+			const vertice_1 = globals.vertex_holder[line.point_index_1];
+			const vertice_2 = globals.vertex_holder[line.point_index_2];
 
-            const distance_x = vertice_2.x - vertice_1.x;
-            const distance_y = vertice_2.y - vertice_1.y;
-            const distance = Math.sqrt(distance_x**2 + distance_y**2);
-            const difference = (line.length - distance) / distance;
-            if (globals.tearing && distance/line.length > globals.tearing_ratio) {
-                globals.line_holder.delete(line);
-            }
+			const distance_x = vertice_2.x - vertice_1.x;
+			const distance_y = vertice_2.y - vertice_1.y;
+			const distance = Math.sqrt(distance_x * distance_x + distance_y * distance_y);
+			const difference = (line.length - distance) / distance;
 
-            const correction_x = distance_x * difference * 0.5;
-            const correction_y = distance_y * difference * 0.5;
+			if (globals.tearing && distance / line.length > globals.tearing_ratio) {
+				// Swap with last live element and shrink
+				globals.line_count--;
+				globals.line_holder[i] = globals.line_holder[globals.line_count];
+				i--; // re-check this index since it now holds a different line
+				continue;
+			}
 
-            if (!vertice_1.fixed && !vertice_1.grabbed) {
-                vertice_1.x -= correction_x * (1 - constants.DAMPING);
-                vertice_1.y -= correction_y * (1 - constants.DAMPING);
-            }
-            if (!vertice_2.fixed && !vertice_2.grabbed) {
-                vertice_2.x += correction_x * (1 - constants.DAMPING);
-                vertice_2.y += correction_y * (1 - constants.DAMPING);
-            }
-        }
-    }
+			const correction_x = distance_x * difference * 0.5;
+			const correction_y = distance_y * difference * 0.5;
 
-    if (globals.cut_mode) {
-        var chosen_line = null;
-        for (let line of globals.line_holder) {
+			if (!vertice_1.fixed && !vertice_1.grabbed) {
+				vertice_1.x -= correction_x * (1 - constants.DAMPING);
+				vertice_1.y -= correction_y * (1 - constants.DAMPING);
+			}
+			if (!vertice_2.fixed && !vertice_2.grabbed) {
+				vertice_2.x += correction_x * (1 - constants.DAMPING);
+				vertice_2.y += correction_y * (1 - constants.DAMPING);
+			}
+		}
+	}
 
-            const vertice_1 = globals.vertex_holder[line.point_index_1];
-            const vertice_2 = globals.vertex_holder[line.point_index_2];
+	if (globals.cut_mode) {
+		var chosen_line_index = -1;
+		for (let i = 0; i < globals.line_count; i++) {
+			const line = globals.line_holder[i];
 
-            const adjusted_mouse_position = {x:(globals.mouse_position.x-globals.render_offset_x)/globals.render_scale, y: (globals.mouse_position.y-globals.render_offset_y)/globals.render_scale}
-            const mouse_bottom_point = {x: adjusted_mouse_position.x, y: adjusted_mouse_position.y+10}
-            const mouse_right_point = {x: adjusted_mouse_position.x+10, y: adjusted_mouse_position.y}
+			const vertice_1 = globals.vertex_holder[line.point_index_1];
+			const vertice_2 = globals.vertex_holder[line.point_index_2];
 
-            const does_intersect = intersect(adjusted_mouse_position,mouse_bottom_point,vertice_1,vertice_2) || intersect(adjusted_mouse_position,mouse_right_point,vertice_1,vertice_2);
+			const adjusted_mouse_position = { x: (globals.mouse_position.x - globals.render_offset_x) / globals.render_scale, y: (globals.mouse_position.y - globals.render_offset_y) / globals.render_scale }
+			const mouse_bottom_point = { x: adjusted_mouse_position.x, y: adjusted_mouse_position.y + 10 }
+			const mouse_right_point = { x: adjusted_mouse_position.x + 10, y: adjusted_mouse_position.y }
 
-            if (does_intersect) {
-                chosen_line = line;
-                break
-            }
-        }
-        if (chosen_line != null) {
-            globals.line_holder.delete(chosen_line)
-        }
-    }
+			const does_intersect = intersect(adjusted_mouse_position, mouse_bottom_point, vertice_1, vertice_2) || intersect(adjusted_mouse_position, mouse_right_point, vertice_1, vertice_2);
 
-    if (globals.drag_mode) {
-        if (globals.still_dragging == false) {
-            var shortest_distance = 9999999999999;
-            globals.chosen_dragging_vertex = null;
-            for (let vertex of globals.vertex_holder) {
-                const distance_to_mouse_x = ((globals.mouse_position.x-globals.render_offset_x)/globals.render_scale) - vertex.x;
-                const distance_to_mouse_y = ((globals.mouse_position.y-globals.render_offset_y)/globals.render_scale) - vertex.y;
-                const distance_to_mouse_squared = distance_to_mouse_x**2+distance_to_mouse_y**2
-                if (distance_to_mouse_squared < shortest_distance) {
-                    shortest_distance = distance_to_mouse_squared
-                    globals.chosen_dragging_vertex = vertex
-                }
-                vertex.grabbed = false;
-            }
-            if (shortest_distance < ((globals.line_length/2)*globals.render_scale)**2) {
-                globals.chosen_dragging_vertex.grabbed = true;
-                globals.still_dragging = true;
-            }
-        }
-    }
+			if (does_intersect) {
+				chosen_line_index = i;
+				break;
+			}
+		}
+		if (chosen_line_index !== -1) {
+			globals.line_count--;
+			globals.line_holder[chosen_line_index] = globals.line_holder[globals.line_count];
+		}
+	}
+
+	if (globals.drag_mode) {
+		if (globals.still_dragging == false) {
+			var shortest_distance = 9999999999999;
+			globals.chosen_dragging_vertex = null;
+			for (let vertex of globals.vertex_holder) {
+				const distance_to_mouse_x = ((globals.mouse_position.x - globals.render_offset_x) / globals.render_scale) - vertex.x;
+				const distance_to_mouse_y = ((globals.mouse_position.y - globals.render_offset_y) / globals.render_scale) - vertex.y;
+				const distance_to_mouse_squared = distance_to_mouse_x ** 2 + distance_to_mouse_y ** 2
+				if (distance_to_mouse_squared < shortest_distance) {
+					shortest_distance = distance_to_mouse_squared
+					globals.chosen_dragging_vertex = vertex
+				}
+				vertex.grabbed = false;
+			}
+
+			var min_grab = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.GRAB_RADIUS_MOBILE : constants.GRAB_RADIUS;
+			var grab_radius = Math.max(min_grab, globals.line_length);
+			if (shortest_distance < grab_radius * grab_radius) {
+				globals.chosen_dragging_vertex.grabbed = true;
+				globals.still_dragging = true;
+			}
+		}
+	}
 }
 
 
-export function setup(globals, app, width, height, pin_number) {
-    width = Math.min(width, 250)
-    height = Math.min(height, 250)
+export function setup(globals, app, constants, width, height, pin_number) {
+	width = Math.min(width, 250)
+	height = Math.min(height, 250)
 
-    if (globals.all_lines_graphics != undefined) {
-        globals.all_lines_graphics.destroy();
-    }
-    if (globals.particle_container != undefined) {
-        globals.particle_container.destroy();
-    }
+	if (globals.sim_container != null) {
+		if (globals.particle_container) {
+			globals.sim_container.removeChild(globals.particle_container);
+			globals.particle_container.removeParticles();
+		}
+		globals.sim_container.destroy({ children: true });
+	}
 
-    globals.vertex_holder = [];
-    globals.line_holder = new Set();
-    globals.particle_holder = [];
-    globals.all_lines_graphics = new Graphics();
+	globals.vertex_holder = [];
+	globals.line_holder = [];
+	globals.line_count = 0;
 
-	globals.line_length = 1000/width
-    
-    if ( window.innerWidth < 800 ) {
-        globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: 1  });
-    } else {
-        globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: Math.max(parseInt(globals.line_length/8), 1)  });
+	globals.particle_holder = [];
 
-    }
-    app.stage.addChild(globals.all_lines_graphics);
-    
+	globals.line_length = 1000 / width;
 
-    globals.particle_container = new Container(width * height, {
-        position: true,
-        rotation: false,
-        uvs: false,
-        tint: true
-    });
+	globals.all_lines_graphics = new Graphics();
 
-    app.stage.addChild(globals.particle_container);
+	var line_thickness = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.LINE_THICKNESS_MOBILE : constants.LINE_THICKNESS;
+	globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: line_thickness });
 
-	var circle_graphic_radius = Math.max(parseInt(globals.line_length/6), 2) 
-    var circleTexture = createCircleTexture(app, circle_graphic_radius);
+	globals.particle_container = new ParticleContainer({
+		dynamicProperties: {
+			position: true,
+			rotation: false,
+			color: false,
+			vertex: false,
+		},
+	});
 
-	for (let i = 0; i < (width*height); i++) {
-		
-		let x = ((i%width)*globals.line_length);
-		let y = (Math.floor(i/width)*globals.line_length);
+	globals.sim_container = new Container();
+	globals.sim_container.addChild(globals.all_lines_graphics);
+	globals.sim_container.addChild(globals.particle_container);
+	app.stage.addChild(globals.sim_container);
 
-        const particle = new Sprite(circleTexture);
-        particle.anchor.set(0.5);
-        particle.position.set(x, y);
-        globals.particle_container.addChild(particle);
+	var circle_graphic_radius = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.PARTICLE_RADIUS_MOBILE : constants.PARTICLE_RADIUS;
+	var circleTexture = createCircleTexture(app, circle_graphic_radius);
 
-        globals.particle_holder.push(particle);
+	for (let i = 0; i < (width * height); i++) {
+
+		let x = ((i % width) * globals.line_length);
+		let y = (Math.floor(i / width) * globals.line_length);
+
+		const particle = new Particle({
+			texture: circleTexture,
+			x: x,
+			y: y,
+			anchorX: 0.5,
+			anchorY: 0.5,
+		});
+		globals.particle_container.addParticle(particle);
+
+		globals.particle_holder.push(particle);
 
 		var vertex = {
-			x : x,
-			y : y,
-			prev_x : x,
-			prev_y : y,
-			fixed : false,
-			grabbed : false,
+			x: x,
+			y: y,
+			prev_x: x,
+			prev_y: y,
+			fixed: false,
+			grabbed: false,
 		}
 		globals.vertex_holder.push(vertex);
 	}
 
-    var total_row_lines = (width-1)*height;
+	var total_row_lines = (width - 1) * height;
 	for (let i = 0; i < total_row_lines; i++) {
-		let x_coord = (i%(width-1));
-		let y_coord = Math.floor(i/(width-1));
-		let left_vertex_index = x_coord+(width*y_coord);
-		let right_vertex_index = left_vertex_index+1;
+		let x_coord = (i % (width - 1));
+		let y_coord = Math.floor(i / (width - 1));
+		let left_vertex_index = x_coord + (width * y_coord);
+		let right_vertex_index = left_vertex_index + 1;
 
 		var line = {
-			point_index_1 : left_vertex_index,
-			point_index_2 : right_vertex_index,
-			length : globals.line_length,
+			point_index_1: left_vertex_index,
+			point_index_2: right_vertex_index,
+			length: globals.line_length,
 		}
-		
-		globals.line_holder.add(line);
+
+		globals.line_holder[globals.line_count] = line;
+		globals.line_count++;
 	}
 
-    var total_column_lines = (height-1)*width;
+	var total_column_lines = (height - 1) * width;
 	for (let i = 0; i < total_column_lines; i++) {
-		let x_coord = i%width;
-		let y_coord = Math.floor(i/width);
-		let top_vertex_index = x_coord+(width*y_coord);
-		let bottom_vertex_index = top_vertex_index+width;
+		let x_coord = i % width;
+		let y_coord = Math.floor(i / width);
+		let top_vertex_index = x_coord + (width * y_coord);
+		let bottom_vertex_index = top_vertex_index + width;
 
 		var line = {
-			point_index_1 : top_vertex_index,
-			point_index_2 : bottom_vertex_index,
-			length : globals.line_length,
+			point_index_1: top_vertex_index,
+			point_index_2: bottom_vertex_index,
+			length: globals.line_length,
 		}
-		
-		globals.line_holder.add(line);
+
+		globals.line_holder[globals.line_count] = line;
+		globals.line_count++;
 	}
 
-	for (let i = 0; i < pin_number-1; i++) {
-		let pin_index = Math.floor(i*width/(pin_number-1))
+	for (let i = 0; i < pin_number - 1; i++) {
+		let pin_index = Math.floor(i * width / (pin_number - 1))
 		globals.vertex_holder[pin_index].fixed = true;
 	}
-	globals.vertex_holder[width-1].fixed = true;
+	globals.vertex_holder[width - 1].fixed = true;
 
-    set_render_offsets_and_scale(globals);
+	set_render_offsets_and_scale(globals);
 }
 
-export function set_up_event_listeners (globals, elements, constants, app) {
+export function set_up_event_listeners(globals, elements, constants, app) {
 
-    elements.settings_close_button.onclick = function() { hide_element(elements.settings_overlay) };
-    elements.settings_open_button.onclick = function() { show_element(elements.settings_overlay) };
-
-
-
-    app.canvas.addEventListener("touchstart", event => {
-        const touches = event.changedTouches;
-        const last_touch = touches[touches.length -1];
-        globals.mouse_position = {x:last_touch.clientX, y:last_touch.clientY}
-        globals.drag_mode = true;
-        globals.still_dragging = false;
-
-    });
-
-    app.canvas.addEventListener("touchend", event => {
-        const touches = event.changedTouches;
-        const last_touch = touches[touches.length -1];
-        globals.mouse_position = {x:last_touch.clientX, y:last_touch.clientY}
-        globals.drag_mode = false
-        globals.still_dragging = false;
-        if (globals.chosen_dragging_vertex != null) {
-            globals.chosen_dragging_vertex.grabbed = false;
-        }
-
-    });
-
-    app.canvas.addEventListener("touchcancel", event => {
-        const touches = event.changedTouches;
-        const last_touch = touches[touches.length -1];
-        globals.mouse_position = {x:last_touch.clientX, y:last_touch.clientY}
-        globals.drag_mode = false
-        globals.still_dragging = false;
-        if (globals.chosen_dragging_vertex != null) {
-            globals.chosen_dragging_vertex.grabbed = false;
-        }
-
-    });
-
-    app.canvas.addEventListener("touchmove", event => {
-        const touches = event.changedTouches;
-        const last_touch = touches[touches.length -1];
-        globals.mouse_position = {x:last_touch.clientX, y:last_touch.clientY}
-
-    });
-
-    function set_menu_open(should_open) {
-        if (should_open) {
-            // Remove hide-menu class from menu holder, which will show the menu
-            elements.menu_items_holder_wrapper.classList.remove("hide-menu");
-
-            // Switch the arrow from the open direction to the close direction
-            // This is to ready the arrow to close the menu as the next action
-            // Adds hidden, hiding the open_arrow
-            elements.open_arrow.classList.add("hidden");
-            // Removes hidden, showing the close_arrow
-            elements.close_arrow.classList.remove("hidden");
-        } else {
-            // Adds hide-menu class from menu holder, which will hide the menu
-            elements.menu_items_holder_wrapper.classList.add("hide-menu");
-
-            // Switch the arrow from the close direction to the open direction
-            // This is to ready the arrow to open the menu as the next action
-            // Removes hidden, showing the open_arrow
-            elements.open_arrow.classList.remove("hidden");
-            // Adds hidden, hiding the close_arrow
-            elements.close_arrow.classList.add("hidden");
-        }
-    }
+	elements.settings_close_button.onclick = function () { hide_element(elements.settings_overlay) };
+	elements.settings_open_button.onclick = function () { show_element(elements.settings_overlay) };
 
 
-    elements.menu_toggle_button.onclick = function() {
 
-        globals.menu_open = !globals.menu_open;
-        set_menu_open(globals.menu_open);
+	app.canvas.addEventListener("touchstart", event => {
+		const touches = event.changedTouches;
+		const last_touch = touches[touches.length - 1];
+		globals.mouse_position = { x: last_touch.clientX, y: last_touch.clientY }
+		globals.drag_mode = true;
+		globals.still_dragging = false;
 
-        
-    };
+	});
+
+	app.canvas.addEventListener("touchend", event => {
+		const touches = event.changedTouches;
+		const last_touch = touches[touches.length - 1];
+		globals.mouse_position = { x: last_touch.clientX, y: last_touch.clientY }
+		globals.drag_mode = false
+		globals.still_dragging = false;
+		if (globals.chosen_dragging_vertex != null) {
+			globals.chosen_dragging_vertex.grabbed = false;
+		}
+
+	});
+
+	app.canvas.addEventListener("touchcancel", event => {
+		const touches = event.changedTouches;
+		const last_touch = touches[touches.length - 1];
+		globals.mouse_position = { x: last_touch.clientX, y: last_touch.clientY }
+		globals.drag_mode = false
+		globals.still_dragging = false;
+		if (globals.chosen_dragging_vertex != null) {
+			globals.chosen_dragging_vertex.grabbed = false;
+		}
+
+	});
+
+	app.canvas.addEventListener("touchmove", event => {
+		const touches = event.changedTouches;
+		const last_touch = touches[touches.length - 1];
+		globals.mouse_position = { x: last_touch.clientX, y: last_touch.clientY }
+
+	});
+
+	function set_menu_open(should_open) {
+		if (should_open) {
+			// Remove hide-menu class from menu holder, which will show the menu
+			elements.menu_items_holder_wrapper.classList.remove("hide-menu");
+
+			// Switch the arrow from the open direction to the close direction
+			// This is to ready the arrow to close the menu as the next action
+			// Adds hidden, hiding the open_arrow
+			elements.open_arrow.classList.add("hidden");
+			// Removes hidden, showing the close_arrow
+			elements.close_arrow.classList.remove("hidden");
+		} else {
+			// Adds hide-menu class from menu holder, which will hide the menu
+			elements.menu_items_holder_wrapper.classList.add("hide-menu");
+
+			// Switch the arrow from the close direction to the open direction
+			// This is to ready the arrow to open the menu as the next action
+			// Removes hidden, showing the open_arrow
+			elements.open_arrow.classList.remove("hidden");
+			// Adds hidden, hiding the close_arrow
+			elements.close_arrow.classList.add("hidden");
+		}
+	}
 
 
-    app.canvas.addEventListener('contextmenu', event => event.preventDefault());
+	elements.menu_toggle_button.onclick = function () {
 
-    app.canvas.addEventListener("mousedown", (event) => {
-
-        if (event.button == globals.drag_button) {
-            globals.drag_mode = true;
-            globals.still_dragging = false;
-        }
-        
-        if (event.button == globals.grav_button) {
-            globals.grav_modifier = 10;
-        }
-
-        if (event.button == globals.cut_button) {
-            globals.cut_mode = true;
-        }
-    });
+		globals.menu_open = !globals.menu_open;
+		set_menu_open(globals.menu_open);
 
 
-    window.addEventListener("resize", (event) => {
-        set_render_offsets_and_scale(globals)
+	};
 
-        if ( window.innerWidth < 800 ) {
-            globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: 1  });
-        } else {
-            globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: Math.max(parseInt(globals.line_length/8), 1)  });
-        }
-    });
 
-    app.canvas.addEventListener("mousemove", (event) => {
-        globals.mouse_position = {x:event.clientX, y:event.clientY}
-    });
+	app.canvas.addEventListener('contextmenu', event => event.preventDefault());
 
-    app.canvas.addEventListener("mouseup", (event) => {
+	app.canvas.addEventListener("mousedown", (event) => {
 
-        if (event.button == globals.drag_button) {
-            globals.drag_mode = false
-            globals.still_dragging = false;
-            if (globals.chosen_dragging_vertex != null) {
-                globals.chosen_dragging_vertex.grabbed = false;
-            }
-        }
-        
-        if (event.button == globals.grav_button) {
-            globals.grav_modifier = 1;
-        }
+		if (event.button == globals.drag_button) {
+			globals.drag_mode = true;
+			globals.still_dragging = false;
+		}
 
-        if (event.button == globals.cut_button) {
-            globals.cut_mode = false;
-        }
-    });
+		if (event.button == globals.grav_button) {
+			globals.grav_modifier = 10;
+		}
 
-    elements.tearing_checkbox.addEventListener('change', function() {
-        if (this.checked) {
-            globals.tearing = true;
-        } else {
-            globals.tearing = false;
-        }
-    });
+		if (event.button == globals.cut_button) {
+			globals.cut_mode = true;
+		}
+	});
 
-    elements.tearing_input.value = globals.tearing_ratio;
-    elements.tearing_input.addEventListener('change', function() {
-        globals.tearing_ratio = this.value;
-    });
 
-    elements.columns_input.value = constants.DEFAULT_COLUMNS;
+	window.addEventListener("resize", (event) => {
+		set_render_offsets_and_scale(globals)
 
-    elements.rows_input.value = constants.DEFAULT_ROWS;
+		var line_thickness = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.LINE_THICKNESS_MOBILE : constants.LINE_THICKNESS;
+		globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: line_thickness });
+	});
 
-    elements.pins_input.value = constants.DEFAULT_PINS;
+	app.canvas.addEventListener("mousemove", (event) => {
+		globals.mouse_position = { x: event.clientX, y: event.clientY }
+	});
 
-    elements.build_button.onclick = function() {
-        let columns = parseInt(elements.columns_input.value);
-        let rows = parseInt(elements.rows_input.value);
-        let pins = parseInt(elements.pins_input.value);
-        setup(globals, app, columns, rows, pins);
-    };
+	app.canvas.addEventListener("mouseup", (event) => {
 
-    elements.constraint_itterations_input.value = 10;
-    elements.constraint_itterations_input.addEventListener('change', function() {
-        globals.constraint_itterations = this.value;
-    });
+		if (event.button == globals.drag_button) {
+			globals.drag_mode = false
+			globals.still_dragging = false;
+			if (globals.chosen_dragging_vertex != null) {
+				globals.chosen_dragging_vertex.grabbed = false;
+			}
+		}
 
-    elements.show_fps_checkbox.addEventListener('change', function() {
-        if (this.checked) {
-            elements.fps_counter.classList.remove('hidden');
-        } else {
-            elements.fps_counter.classList.add('hidden');
-        }
-    });
+		if (event.button == globals.grav_button) {
+			globals.grav_modifier = 1;
+		}
 
-    elements.cut_button_selection_dropdown.addEventListener('change', function() {
-        //console.log("cut_button_selection_dropdown:", this.value)
-        if ( this.value == "left-click" ) {
-            globals.cut_button = 0;
-        } else if ( this.value == "middle-click" ) {
-            globals.cut_button = 1;
-        } else if ( this.value == "right-click" ) {
-            globals.cut_button = 2;
-        }
-    });
+		if (event.button == globals.cut_button) {
+			globals.cut_mode = false;
+		}
+	});
 
-    elements.grav_button_selection_dropdown.addEventListener('change', function() {
-        //console.log("grav_button_selection_dropdown:", this.value)
-        if ( this.value == "left-click" ) {
-            globals.grav_button = 0;
-        } else if ( this.value == "middle-click" ) {
-            globals.grav_button = 1;
-        } else if ( this.value == "right-click" ) {
-            globals.grav_button = 2;
-        }
-    });
+	elements.tearing_checkbox.addEventListener('change', function () {
+		if (this.checked) {
+			globals.tearing = true;
+		} else {
+			globals.tearing = false;
+		}
+	});
 
-    elements.drag_button_selection_dropdown.addEventListener('change', function() {
-        //console.log("drag_button_selection_dropdown:", this.value)
-        if ( this.value == "left-click" ) {
-            globals.drag_button = 0;
-        } else if ( this.value == "middle-click" ) {
-            globals.drag_button = 1;
-        } else if ( this.value == "right-click" ) {
-            globals.drag_button = 2;
-        }
-    });
+	elements.tearing_input.value = globals.tearing_ratio;
+	elements.tearing_input.addEventListener('change', function () {
+		globals.tearing_ratio = this.value;
+	});
 
-    function threshold_input_field(){
+	elements.columns_input.value = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.DEFAULT_COLUMNS_MOBILE : constants.DEFAULT_COLUMNS;
 
-        if (elements.columns_input.value > 250) {
-            elements.columns_input.value = 250
-        }
-        if (elements.rows_input.value > 250) {
-            elements.rows_input.value = 250
-        }
-        if (elements.pins_input.value > 250) {
-            elements.pins_input.value = 250
-        }
-    }
+	elements.rows_input.value = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.DEFAULT_ROWS_MOBILE : constants.DEFAULT_ROWS;
 
-    elements.columns_input.onkeydown = function(event){
-        if(event.key === 'Enter'){
-            let columns = parseInt(elements.columns_input.value);
-            let rows = parseInt(elements.rows_input.value);
-            let pins = parseInt(elements.pins_input.value);
-            setup(globals, app, columns, rows, pins);
-            threshold_input_field()
-        }
-    };
+	elements.pins_input.value = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.DEFAULT_PINS_MOBILE : constants.DEFAULT_PINS;
 
-    elements.rows_input.onkeydown = function(event){
-        if(event.key === 'Enter'){
-            let columns = parseInt(elements.columns_input.value);
-            let rows = parseInt(elements.rows_input.value);
-            let pins = parseInt(elements.pins_input.value);
-            setup(globals, app, columns, rows, pins);
-            threshold_input_field()
-        }
-    };
 
-    elements.pins_input.onkeydown = function(event){
-        if(event.key === 'Enter'){
-            let columns = parseInt(elements.columns_input.value);
-            let rows = parseInt(elements.rows_input.value);
-            let pins = parseInt(elements.pins_input.value);
-            setup(globals, app, columns, rows, pins);
-            threshold_input_field()
-        }
-    };
+	elements.build_button.onclick = function () {
+		let columns = parseInt(elements.columns_input.value);
+		let rows = parseInt(elements.rows_input.value);
+		let pins = parseInt(elements.pins_input.value);
+		setup(globals, app, constants, columns, rows, pins);
+	};
+
+	elements.constraint_itterations_input.value = window.innerWidth < constants.MOBILE_BREAKPOINT ? 8 : 10;
+	elements.constraint_itterations_input.addEventListener('change', function () {
+		globals.constraint_itterations = this.value;
+	});
+
+	elements.show_fps_checkbox.addEventListener('change', function () {
+		if (this.checked) {
+			elements.fps_counter.classList.remove('hidden');
+		} else {
+			elements.fps_counter.classList.add('hidden');
+		}
+	});
+
+	elements.cut_button_selection_dropdown.addEventListener('change', function () {
+		//console.log("cut_button_selection_dropdown:", this.value)
+		if (this.value == "left-click") {
+			globals.cut_button = 0;
+		} else if (this.value == "middle-click") {
+			globals.cut_button = 1;
+		} else if (this.value == "right-click") {
+			globals.cut_button = 2;
+		}
+	});
+
+	elements.grav_button_selection_dropdown.addEventListener('change', function () {
+		//console.log("grav_button_selection_dropdown:", this.value)
+		if (this.value == "left-click") {
+			globals.grav_button = 0;
+		} else if (this.value == "middle-click") {
+			globals.grav_button = 1;
+		} else if (this.value == "right-click") {
+			globals.grav_button = 2;
+		}
+	});
+
+	elements.drag_button_selection_dropdown.addEventListener('change', function () {
+		//console.log("drag_button_selection_dropdown:", this.value)
+		if (this.value == "left-click") {
+			globals.drag_button = 0;
+		} else if (this.value == "middle-click") {
+			globals.drag_button = 1;
+		} else if (this.value == "right-click") {
+			globals.drag_button = 2;
+		}
+	});
+
+	function threshold_input_field() {
+
+		if (elements.columns_input.value > 250) {
+			elements.columns_input.value = 250
+		}
+		if (elements.rows_input.value > 250) {
+			elements.rows_input.value = 250
+		}
+		if (elements.pins_input.value > 250) {
+			elements.pins_input.value = 250
+		}
+	}
+
+	elements.columns_input.onkeydown = function (event) {
+		if (event.key === 'Enter') {
+			let columns = parseInt(elements.columns_input.value);
+			let rows = parseInt(elements.rows_input.value);
+			let pins = parseInt(elements.pins_input.value);
+			setup(globals, app, constants, columns, rows, pins);
+			threshold_input_field()
+		}
+	};
+
+	elements.rows_input.onkeydown = function (event) {
+		if (event.key === 'Enter') {
+			let columns = parseInt(elements.columns_input.value);
+			let rows = parseInt(elements.rows_input.value);
+			let pins = parseInt(elements.pins_input.value);
+			setup(globals, app, constants, columns, rows, pins);
+			threshold_input_field()
+		}
+	};
+
+	elements.pins_input.onkeydown = function (event) {
+		if (event.key === 'Enter') {
+			let columns = parseInt(elements.columns_input.value);
+			let rows = parseInt(elements.rows_input.value);
+			let pins = parseInt(elements.pins_input.value);
+			setup(globals, app, constants, columns, rows, pins);
+			threshold_input_field()
+		}
+	};
 
 
 }
@@ -1122,12 +1302,74 @@ export function set_up_event_listeners (globals, elements, constants, app) {
     </div>
 
   </div>
+
+  <div id="perf-overlay">
+    <div id="perf-text"></div>
+  </div>
   
   <div id="cloth-sim-holder">
 
   </div>
 </body>
 </html>
+</file>
+
+<file path="README.md">
+# Cloth Simulation with Verlet Integration
+
+A JavaScript-based cloth simulation using Verlet integration and constraints, rendered with [PixiJS](https://pixijs.com/).
+
+![Cloth Simulation Screenshot](https://github.com/Ryan-Axtell-abc/verlet-cloth-sim/blob/main/assets/screenshot.png)
+
+## Demo
+
+[Live Demo Link](https://fabric.ryanaxtell.dev/)
+
+# Controls
+
+| Command          | Action         |
+|------------------|----------------|
+| **Left click**   | Drag cloth     |
+| **Middle Click** | High grav mode |
+| **Right click**  | Cut cloth      |
+
+## Installation
+
+### Prerequisites
+
+- **Node.js** (v12 or higher recommended)
+- **npm** (comes with Node.js)
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/Ryan-Axtell-abc/verlet-cloth-sim.git
+cd verlet-cloth-sim
+```
+
+### Install Dependencies
+
+```bash
+npm install
+```
+
+## Usage
+
+### Running the Simulation
+
+```bash
+npx vite
+```
+
+Open your web browser and navigate to `http://localhost:5173` to view the simulation.
+
+### Building for Production
+
+```bash
+npx vite build
+```
+
+The production-ready files will be in the `dist/` directory.
 </file>
 
 <file path="src/styles.css">
@@ -1659,64 +1901,28 @@ input:checked + .slider:before {
 	-ms-transform: translateX(var(--offset));
 	transform: translateX(var(--offset));
 }
-</file>
 
-<file path="README.md">
-# Cloth Simulation with Verlet Integration
+#perf-overlay {
+    position: absolute;
+    z-index: 50;
+    left: var(--gap);
+    top: var(--gap);
+    font-family: monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    background: rgb(0 0 0 / 70%);
+    color: #0f0;
+    padding: 6px 10px;
+    border-radius: 6px;
+    white-space: pre;
+    display: block;
+}
 
-A JavaScript-based cloth simulation using Verlet integration and constraints, rendered with [PixiJS](https://pixijs.com/).
-
-![Cloth Simulation Screenshot](https://github.com/Ryan-Axtell-abc/verlet-cloth-sim/blob/main/assets/screenshot.png)
-
-## Demo
-
-[Live Demo Link](https://fabric.ryanaxtell.dev/)
-
-# Controls
-
-| Command          | Action         |
-|------------------|----------------|
-| **Left click**   | Drag cloth     |
-| **Middle Click** | High grav mode |
-| **Right click**  | Cut cloth      |
-
-## Installation
-
-### Prerequisites
-
-- **Node.js** (v12 or higher recommended)
-- **npm** (comes with Node.js)
-
-### Clone the Repository
-
-```bash
-git clone https://github.com/Ryan-Axtell-abc/verlet-cloth-sim.git
-cd verlet-cloth-sim
-```
-
-### Install Dependencies
-
-```bash
-npm install
-```
-
-## Usage
-
-### Running the Simulation
-
-```bash
-npx vite
-```
-
-Open your web browser and navigate to `http://localhost:5173` to view the simulation.
-
-### Building for Production
-
-```bash
-npx vite build
-```
-
-The production-ready files will be in the `dist/` directory.
+#cloth-sim-holder *{
+	position: absolute;
+	width: 100%;
+	height: 100%;
+}
 </file>
 
 </files>

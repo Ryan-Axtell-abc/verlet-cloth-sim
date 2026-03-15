@@ -1,554 +1,555 @@
 import { Container, Graphics, Sprite, Particle, ParticleContainer } from "pixi.js";
 
 export function create_fps_counter() {
-	var script=document.createElement('script');
-	script.onload=function(){var stats=new Stats();
+	var script = document.createElement('script');
+	script.onload = function () {
+		var stats = new Stats();
 		document.body.appendChild(stats.dom);
-		stats.dom.id='fps-counter-element'
-		requestAnimationFrame(function loop(){stats.update();
-			requestAnimationFrame(loop)});
+		stats.dom.id = 'fps-counter-element'
+		requestAnimationFrame(function loop() {
+			stats.update();
+			requestAnimationFrame(loop)
+		});
 	};
-	script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';
+	script.src = 'https://mrdoob.github.io/stats.js/build/stats.min.js';
 	document.head.appendChild(script);
 	//globals.loading_fps_counter
 }
 
 export function draw_lines(globals) {
-    globals.all_lines_graphics.clear();
-    globals.all_lines_graphics.beginPath();
+	globals.all_lines_graphics.clear();
+	globals.all_lines_graphics.beginPath();
 
-    for (let i = 0; i < globals.line_count; i++) {
-        const line = globals.line_holder[i];
-        const vertice_1 = globals.vertex_holder[line.point_index_1];
-        const vertice_2 = globals.vertex_holder[line.point_index_2];
+	for (let i = 0; i < globals.line_count; i++) {
+		const line = globals.line_holder[i];
+		const vertice_1 = globals.vertex_holder[line.point_index_1];
+		const vertice_2 = globals.vertex_holder[line.point_index_2];
 
-        globals.all_lines_graphics.moveTo(vertice_1.x, vertice_1.y);
-        globals.all_lines_graphics.lineTo(vertice_2.x, vertice_2.y);
-    }
-    globals.all_lines_graphics.stroke();
+		globals.all_lines_graphics.moveTo(vertice_1.x, vertice_1.y);
+		globals.all_lines_graphics.lineTo(vertice_2.x, vertice_2.y);
+	}
+	globals.all_lines_graphics.stroke();
 }
 
 export function hide_element(element) {
-    element.classList.add('hidden');
+	element.classList.add('hidden');
 }
 
 export function show_element(element) {
-    element.classList.remove('hidden');
+	element.classList.remove('hidden');
 }
 
 export function createCircleTexture(app, radius) {
-    const graphics = new Graphics();
-    graphics.circle(0, 0, radius);
-    graphics.fill(0x000000);
-    return app.renderer.generateTexture(graphics);
+	const graphics = new Graphics();
+	graphics.circle(0, 0, radius);
+	graphics.fill(0x000000);
+	return app.renderer.generateTexture(graphics);
 }
 
 export function set_render_offsets_and_scale(globals) {
-    globals.render_offset_y = 100
+	globals.render_offset_y = 100
 
-    if (window.innerWidth < 1040) {
-        globals.render_offset_x = 20
-        globals.render_scale = (window.innerWidth - 40) / 1000
-    } else {
-        globals.render_scale = 1
-        globals.render_offset_x = Math.floor((window.innerWidth - 1000) / 2)
-    }
+	if (window.innerWidth < 1040) {
+		globals.render_offset_x = 20
+		globals.render_scale = (window.innerWidth - 40) / 1000
+	} else {
+		globals.render_scale = 1
+		globals.render_offset_x = Math.floor((window.innerWidth - 1000) / 2)
+	}
 
-    if (globals.sim_container) {
-        globals.sim_container.position.set(globals.render_offset_x, globals.render_offset_y);
-        globals.sim_container.scale.set(globals.render_scale);
-    }
+	if (globals.sim_container) {
+		globals.sim_container.position.set(globals.render_offset_x, globals.render_offset_y);
+		globals.sim_container.scale.set(globals.render_scale);
+	}
 }
 
-function ccw(A,B,C) {
-    return (C.y-A.y) * (B.x-A.x) > (B.y-A.y) * (C.x-A.x);
+function ccw(A, B, C) {
+	return (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
 }
 
 // Return true if line segments AB and CD intersect
-export function intersect(A,B,C,D) {
-    return ccw(A,C,D) != ccw(B,C,D) && ccw(A,B,C) != ccw(A,B,D)
+export function intersect(A, B, C, D) {
+	return ccw(A, C, D) != ccw(B, C, D) && ccw(A, B, C) != ccw(A, B, D)
 }
 
 
 export function update_drawn_particles(globals) {
-    for (let i = 0; i < globals.vertex_holder.length; i++) {
-        const vertex = globals.vertex_holder[i];
-        const particle = globals.particle_holder[i];
-        particle.x = vertex.x;
-        particle.y = vertex.y;
-    }
+	for (let i = 0; i < globals.vertex_holder.length; i++) {
+		const vertex = globals.vertex_holder[i];
+		const particle = globals.particle_holder[i];
+		particle.x = vertex.x;
+		particle.y = vertex.y;
+	}
 }
 
 export function updatePhysics(globals, constants, dt) {
-    // Update positions
-    for (let vertex of globals.vertex_holder) {
-        if (vertex.fixed && !vertex.grabbed) {
-            vertex.prev_x = vertex.x;
-            vertex.prev_y = vertex.y;
-            
-        } else if (vertex.grabbed) {
-            vertex.prev_x = vertex.x;
-            vertex.prev_y = vertex.y;
+	// Update positions
+	for (let vertex of globals.vertex_holder) {
+		if (vertex.fixed && !vertex.grabbed) {
+			vertex.prev_x = vertex.x;
+			vertex.prev_y = vertex.y;
 
-            vertex.x = (globals.mouse_position.x-globals.render_offset_x)/globals.render_scale;
-            vertex.y = (globals.mouse_position.y-globals.render_offset_y)/globals.render_scale;
+		} else if (vertex.grabbed) {
+			vertex.prev_x = vertex.x;
+			vertex.prev_y = vertex.y;
 
-        } else {
-            const vx = (vertex.x - vertex.prev_x) * constants.DRAG;
-            const vy = (vertex.y - vertex.prev_y) * constants.DRAG + constants.GRAVITY * globals.grav_modifier * dt * dt;
+			vertex.x = (globals.mouse_position.x - globals.render_offset_x) / globals.render_scale;
+			vertex.y = (globals.mouse_position.y - globals.render_offset_y) / globals.render_scale;
 
-            vertex.prev_x = vertex.x;
-            vertex.prev_y = vertex.y;
-            vertex.x += vx;
-            vertex.y += vy;
-        }
-    }
+		} else {
+			const vx = (vertex.x - vertex.prev_x) * constants.DRAG;
+			const vy = (vertex.y - vertex.prev_y) * constants.DRAG + constants.GRAVITY * globals.grav_modifier * dt * dt;
 
-    // Solve constraints
-    for (let f = 0; f < globals.constraint_itterations; f++) {
-    for (let i = 0; i < globals.line_count; i++) {
-        const line = globals.line_holder[i];
-        const vertice_1 = globals.vertex_holder[line.point_index_1];
-        const vertice_2 = globals.vertex_holder[line.point_index_2];
+			vertex.prev_x = vertex.x;
+			vertex.prev_y = vertex.y;
+			vertex.x += vx;
+			vertex.y += vy;
+		}
+	}
 
-        const distance_x = vertice_2.x - vertice_1.x;
-        const distance_y = vertice_2.y - vertice_1.y;
-        const distance = Math.sqrt(distance_x * distance_x + distance_y * distance_y);
-        const difference = (line.length - distance) / distance;
+	// Solve constraints
+	for (let f = 0; f < globals.constraint_itterations; f++) {
+		for (let i = 0; i < globals.line_count; i++) {
+			const line = globals.line_holder[i];
+			const vertice_1 = globals.vertex_holder[line.point_index_1];
+			const vertice_2 = globals.vertex_holder[line.point_index_2];
 
-        if (globals.tearing && distance / line.length > globals.tearing_ratio) {
-            // Swap with last live element and shrink
-            globals.line_count--;
-            globals.line_holder[i] = globals.line_holder[globals.line_count];
-            i--; // re-check this index since it now holds a different line
-            continue;
-        }
+			const distance_x = vertice_2.x - vertice_1.x;
+			const distance_y = vertice_2.y - vertice_1.y;
+			const distance = Math.sqrt(distance_x * distance_x + distance_y * distance_y);
+			const difference = (line.length - distance) / distance;
 
-        const correction_x = distance_x * difference * 0.5;
-        const correction_y = distance_y * difference * 0.5;
+			if (globals.tearing && distance / line.length > globals.tearing_ratio) {
+				// Swap with last live element and shrink
+				globals.line_count--;
+				globals.line_holder[i] = globals.line_holder[globals.line_count];
+				i--; // re-check this index since it now holds a different line
+				continue;
+			}
 
-        if (!vertice_1.fixed && !vertice_1.grabbed) {
-            vertice_1.x -= correction_x * (1 - constants.DAMPING);
-            vertice_1.y -= correction_y * (1 - constants.DAMPING);
-        }
-        if (!vertice_2.fixed && !vertice_2.grabbed) {
-            vertice_2.x += correction_x * (1 - constants.DAMPING);
-            vertice_2.y += correction_y * (1 - constants.DAMPING);
-        }
-    }
+			const correction_x = distance_x * difference * 0.5;
+			const correction_y = distance_y * difference * 0.5;
+
+			if (!vertice_1.fixed && !vertice_1.grabbed) {
+				vertice_1.x -= correction_x * (1 - constants.DAMPING);
+				vertice_1.y -= correction_y * (1 - constants.DAMPING);
+			}
+			if (!vertice_2.fixed && !vertice_2.grabbed) {
+				vertice_2.x += correction_x * (1 - constants.DAMPING);
+				vertice_2.y += correction_y * (1 - constants.DAMPING);
+			}
+		}
+	}
+
+	if (globals.cut_mode) {
+		var chosen_line_index = -1;
+		for (let i = 0; i < globals.line_count; i++) {
+			const line = globals.line_holder[i];
+
+			const vertice_1 = globals.vertex_holder[line.point_index_1];
+			const vertice_2 = globals.vertex_holder[line.point_index_2];
+
+			const adjusted_mouse_position = { x: (globals.mouse_position.x - globals.render_offset_x) / globals.render_scale, y: (globals.mouse_position.y - globals.render_offset_y) / globals.render_scale }
+			const mouse_bottom_point = { x: adjusted_mouse_position.x, y: adjusted_mouse_position.y + 10 }
+			const mouse_right_point = { x: adjusted_mouse_position.x + 10, y: adjusted_mouse_position.y }
+
+			const does_intersect = intersect(adjusted_mouse_position, mouse_bottom_point, vertice_1, vertice_2) || intersect(adjusted_mouse_position, mouse_right_point, vertice_1, vertice_2);
+
+			if (does_intersect) {
+				chosen_line_index = i;
+				break;
+			}
+		}
+		if (chosen_line_index !== -1) {
+			globals.line_count--;
+			globals.line_holder[chosen_line_index] = globals.line_holder[globals.line_count];
+		}
+	}
+
+	if (globals.drag_mode) {
+		if (globals.still_dragging == false) {
+			var shortest_distance = 9999999999999;
+			globals.chosen_dragging_vertex = null;
+			for (let vertex of globals.vertex_holder) {
+				const distance_to_mouse_x = ((globals.mouse_position.x - globals.render_offset_x) / globals.render_scale) - vertex.x;
+				const distance_to_mouse_y = ((globals.mouse_position.y - globals.render_offset_y) / globals.render_scale) - vertex.y;
+				const distance_to_mouse_squared = distance_to_mouse_x ** 2 + distance_to_mouse_y ** 2
+				if (distance_to_mouse_squared < shortest_distance) {
+					shortest_distance = distance_to_mouse_squared
+					globals.chosen_dragging_vertex = vertex
+				}
+				vertex.grabbed = false;
+			}
+
+			var min_grab = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.GRAB_RADIUS_MOBILE : constants.GRAB_RADIUS;
+			var grab_radius = Math.max(min_grab, globals.line_length * .5);
+			//console.log("grab_radius:", grab_radius)
+			if (shortest_distance < grab_radius * grab_radius) {
+				globals.chosen_dragging_vertex.grabbed = true;
+				globals.still_dragging = true;
+			}
+		}
+	}
 }
 
-    if (globals.cut_mode) {
-        var chosen_line_index = -1;
-        for (let i = 0; i < globals.line_count; i++) {
-    const line = globals.line_holder[i];
 
-            const vertice_1 = globals.vertex_holder[line.point_index_1];
-            const vertice_2 = globals.vertex_holder[line.point_index_2];
+export function setup(globals, app, constants, width, height, pin_number) {
+	width = Math.min(width, 250)
+	height = Math.min(height, 250)
 
-            const adjusted_mouse_position = {x:(globals.mouse_position.x-globals.render_offset_x)/globals.render_scale, y: (globals.mouse_position.y-globals.render_offset_y)/globals.render_scale}
-            const mouse_bottom_point = {x: adjusted_mouse_position.x, y: adjusted_mouse_position.y+10}
-            const mouse_right_point = {x: adjusted_mouse_position.x+10, y: adjusted_mouse_position.y}
+	if (globals.sim_container != null) {
+		if (globals.particle_container) {
+			globals.sim_container.removeChild(globals.particle_container);
+			globals.particle_container.removeParticles();
+		}
+		globals.sim_container.destroy({ children: true });
+	}
 
-            const does_intersect = intersect(adjusted_mouse_position,mouse_bottom_point,vertice_1,vertice_2) || intersect(adjusted_mouse_position,mouse_right_point,vertice_1,vertice_2);
+	globals.vertex_holder = [];
+	globals.line_holder = [];
+	globals.line_count = 0;
 
-           if (does_intersect) {
-    chosen_line_index = i;
-    break;
-}
-        }
-if (chosen_line_index !== -1) {
-    globals.line_count--;
-    globals.line_holder[chosen_line_index] = globals.line_holder[globals.line_count];
-}
-    }
+	globals.particle_holder = [];
 
-    if (globals.drag_mode) {
-        if (globals.still_dragging == false) {
-            var shortest_distance = 9999999999999;
-            globals.chosen_dragging_vertex = null;
-            for (let vertex of globals.vertex_holder) {
-                const distance_to_mouse_x = ((globals.mouse_position.x-globals.render_offset_x)/globals.render_scale) - vertex.x;
-                const distance_to_mouse_y = ((globals.mouse_position.y-globals.render_offset_y)/globals.render_scale) - vertex.y;
-                const distance_to_mouse_squared = distance_to_mouse_x**2+distance_to_mouse_y**2
-                if (distance_to_mouse_squared < shortest_distance) {
-                    shortest_distance = distance_to_mouse_squared
-                    globals.chosen_dragging_vertex = vertex
-                }
-                vertex.grabbed = false;
-            }
-            if (shortest_distance < ((globals.line_length/2)*globals.render_scale)**2) {
-                globals.chosen_dragging_vertex.grabbed = true;
-                globals.still_dragging = true;
-            }
-        }
-    }
-}
+	globals.line_length = 1000 / width;
 
+	globals.all_lines_graphics = new Graphics();
 
-export function setup(globals, app, width, height, pin_number) {
-    width = Math.min(width, 250)
-    height = Math.min(height, 250)
+	var line_thickness = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.LINE_THICKNESS_MOBILE : constants.LINE_THICKNESS;
+	globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: line_thickness });
 
-if (globals.sim_container != null) {
-    if (globals.particle_container) {
-        globals.sim_container.removeChild(globals.particle_container);
-        globals.particle_container.removeParticles();
-    }
-    globals.sim_container.destroy({ children: true });
-}
+	globals.particle_container = new ParticleContainer({
+		dynamicProperties: {
+			position: true,
+			rotation: false,
+			color: false,
+			vertex: false,
+		},
+	});
 
-    globals.vertex_holder = [];
-    globals.line_holder = [];
-    globals.line_count = 0;
+	globals.sim_container = new Container();
+	globals.sim_container.addChild(globals.all_lines_graphics);
+	globals.sim_container.addChild(globals.particle_container);
+	app.stage.addChild(globals.sim_container);
 
-    globals.particle_holder = [];
+	var circle_graphic_radius = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.PARTICLE_RADIUS_MOBILE : constants.PARTICLE_RADIUS;
+	var circleTexture = createCircleTexture(app, circle_graphic_radius);
 
-	globals.line_length = 1000/width;
+	for (let i = 0; i < (width * height); i++) {
 
-    globals.all_lines_graphics = new Graphics();
+		let x = ((i % width) * globals.line_length);
+		let y = (Math.floor(i / width) * globals.line_length);
 
-if (window.innerWidth < 800) {
-    globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: 1 });
-} else {
-    globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: Math.max(parseInt(globals.line_length / 8), 1) });
-}
+		const particle = new Particle({
+			texture: circleTexture,
+			x: x,
+			y: y,
+			anchorX: 0.5,
+			anchorY: 0.5,
+		});
+		globals.particle_container.addParticle(particle);
 
-globals.particle_container = new ParticleContainer({
-    dynamicProperties: {
-        position: true,
-        rotation: false,
-        color: false,
-        vertex: false,
-    },
-});
-
-globals.sim_container = new Container();
-globals.sim_container.addChild(globals.all_lines_graphics);
-globals.sim_container.addChild(globals.particle_container);
-app.stage.addChild(globals.sim_container);
-
-	var circle_graphic_radius = Math.max(parseInt(globals.line_length/6), 2) 
-    var circleTexture = createCircleTexture(app, circle_graphic_radius);
-
-	for (let i = 0; i < (width*height); i++) {
-		
-		let x = ((i%width)*globals.line_length);
-		let y = (Math.floor(i/width)*globals.line_length);
-
-        const particle = new Particle({
-    texture: circleTexture,
-    x: x,
-    y: y,
-    anchorX: 0.5,
-    anchorY: 0.5,
-});
-globals.particle_container.addParticle(particle);
-
-        globals.particle_holder.push(particle);
+		globals.particle_holder.push(particle);
 
 		var vertex = {
-			x : x,
-			y : y,
-			prev_x : x,
-			prev_y : y,
-			fixed : false,
-			grabbed : false,
+			x: x,
+			y: y,
+			prev_x: x,
+			prev_y: y,
+			fixed: false,
+			grabbed: false,
 		}
 		globals.vertex_holder.push(vertex);
 	}
 
-    var total_row_lines = (width-1)*height;
+	var total_row_lines = (width - 1) * height;
 	for (let i = 0; i < total_row_lines; i++) {
-		let x_coord = (i%(width-1));
-		let y_coord = Math.floor(i/(width-1));
-		let left_vertex_index = x_coord+(width*y_coord);
-		let right_vertex_index = left_vertex_index+1;
+		let x_coord = (i % (width - 1));
+		let y_coord = Math.floor(i / (width - 1));
+		let left_vertex_index = x_coord + (width * y_coord);
+		let right_vertex_index = left_vertex_index + 1;
 
 		var line = {
-			point_index_1 : left_vertex_index,
-			point_index_2 : right_vertex_index,
-			length : globals.line_length,
+			point_index_1: left_vertex_index,
+			point_index_2: right_vertex_index,
+			length: globals.line_length,
 		}
-		
+
 		globals.line_holder[globals.line_count] = line;
-        globals.line_count++;
+		globals.line_count++;
 	}
 
-    var total_column_lines = (height-1)*width;
+	var total_column_lines = (height - 1) * width;
 	for (let i = 0; i < total_column_lines; i++) {
-		let x_coord = i%width;
-		let y_coord = Math.floor(i/width);
-		let top_vertex_index = x_coord+(width*y_coord);
-		let bottom_vertex_index = top_vertex_index+width;
+		let x_coord = i % width;
+		let y_coord = Math.floor(i / width);
+		let top_vertex_index = x_coord + (width * y_coord);
+		let bottom_vertex_index = top_vertex_index + width;
 
 		var line = {
-			point_index_1 : top_vertex_index,
-			point_index_2 : bottom_vertex_index,
-			length : globals.line_length,
+			point_index_1: top_vertex_index,
+			point_index_2: bottom_vertex_index,
+			length: globals.line_length,
 		}
-		
+
 		globals.line_holder[globals.line_count] = line;
-        globals.line_count++;
+		globals.line_count++;
 	}
 
-	for (let i = 0; i < pin_number-1; i++) {
-		let pin_index = Math.floor(i*width/(pin_number-1))
+	for (let i = 0; i < pin_number - 1; i++) {
+		let pin_index = Math.floor(i * width / (pin_number - 1))
 		globals.vertex_holder[pin_index].fixed = true;
 	}
-	globals.vertex_holder[width-1].fixed = true;
+	globals.vertex_holder[width - 1].fixed = true;
 
-    set_render_offsets_and_scale(globals);
+	set_render_offsets_and_scale(globals);
 }
 
-export function set_up_event_listeners (globals, elements, constants, app) {
+export function set_up_event_listeners(globals, elements, constants, app) {
 
-    elements.settings_close_button.onclick = function() { hide_element(elements.settings_overlay) };
-    elements.settings_open_button.onclick = function() { show_element(elements.settings_overlay) };
-
-
-
-    app.canvas.addEventListener("touchstart", event => {
-        const touches = event.changedTouches;
-        const last_touch = touches[touches.length -1];
-        globals.mouse_position = {x:last_touch.clientX, y:last_touch.clientY}
-        globals.drag_mode = true;
-        globals.still_dragging = false;
-
-    });
-
-    app.canvas.addEventListener("touchend", event => {
-        const touches = event.changedTouches;
-        const last_touch = touches[touches.length -1];
-        globals.mouse_position = {x:last_touch.clientX, y:last_touch.clientY}
-        globals.drag_mode = false
-        globals.still_dragging = false;
-        if (globals.chosen_dragging_vertex != null) {
-            globals.chosen_dragging_vertex.grabbed = false;
-        }
-
-    });
-
-    app.canvas.addEventListener("touchcancel", event => {
-        const touches = event.changedTouches;
-        const last_touch = touches[touches.length -1];
-        globals.mouse_position = {x:last_touch.clientX, y:last_touch.clientY}
-        globals.drag_mode = false
-        globals.still_dragging = false;
-        if (globals.chosen_dragging_vertex != null) {
-            globals.chosen_dragging_vertex.grabbed = false;
-        }
-
-    });
-
-    app.canvas.addEventListener("touchmove", event => {
-        const touches = event.changedTouches;
-        const last_touch = touches[touches.length -1];
-        globals.mouse_position = {x:last_touch.clientX, y:last_touch.clientY}
-
-    });
-
-    function set_menu_open(should_open) {
-        if (should_open) {
-            // Remove hide-menu class from menu holder, which will show the menu
-            elements.menu_items_holder_wrapper.classList.remove("hide-menu");
-
-            // Switch the arrow from the open direction to the close direction
-            // This is to ready the arrow to close the menu as the next action
-            // Adds hidden, hiding the open_arrow
-            elements.open_arrow.classList.add("hidden");
-            // Removes hidden, showing the close_arrow
-            elements.close_arrow.classList.remove("hidden");
-        } else {
-            // Adds hide-menu class from menu holder, which will hide the menu
-            elements.menu_items_holder_wrapper.classList.add("hide-menu");
-
-            // Switch the arrow from the close direction to the open direction
-            // This is to ready the arrow to open the menu as the next action
-            // Removes hidden, showing the open_arrow
-            elements.open_arrow.classList.remove("hidden");
-            // Adds hidden, hiding the close_arrow
-            elements.close_arrow.classList.add("hidden");
-        }
-    }
+	elements.settings_close_button.onclick = function () { hide_element(elements.settings_overlay) };
+	elements.settings_open_button.onclick = function () { show_element(elements.settings_overlay) };
 
 
-    elements.menu_toggle_button.onclick = function() {
 
-        globals.menu_open = !globals.menu_open;
-        set_menu_open(globals.menu_open);
+	app.canvas.addEventListener("touchstart", event => {
+		const touches = event.changedTouches;
+		const last_touch = touches[touches.length - 1];
+		globals.mouse_position = { x: last_touch.clientX, y: last_touch.clientY }
+		globals.drag_mode = true;
+		globals.still_dragging = false;
 
-        
-    };
+	});
 
+	app.canvas.addEventListener("touchend", event => {
+		const touches = event.changedTouches;
+		const last_touch = touches[touches.length - 1];
+		globals.mouse_position = { x: last_touch.clientX, y: last_touch.clientY }
+		globals.drag_mode = false
+		globals.still_dragging = false;
+		if (globals.chosen_dragging_vertex != null) {
+			globals.chosen_dragging_vertex.grabbed = false;
+		}
 
-    app.canvas.addEventListener('contextmenu', event => event.preventDefault());
+	});
 
-    app.canvas.addEventListener("mousedown", (event) => {
+	app.canvas.addEventListener("touchcancel", event => {
+		const touches = event.changedTouches;
+		const last_touch = touches[touches.length - 1];
+		globals.mouse_position = { x: last_touch.clientX, y: last_touch.clientY }
+		globals.drag_mode = false
+		globals.still_dragging = false;
+		if (globals.chosen_dragging_vertex != null) {
+			globals.chosen_dragging_vertex.grabbed = false;
+		}
 
-        if (event.button == globals.drag_button) {
-            globals.drag_mode = true;
-            globals.still_dragging = false;
-        }
-        
-        if (event.button == globals.grav_button) {
-            globals.grav_modifier = 10;
-        }
+	});
 
-        if (event.button == globals.cut_button) {
-            globals.cut_mode = true;
-        }
-    });
+	app.canvas.addEventListener("touchmove", event => {
+		const touches = event.changedTouches;
+		const last_touch = touches[touches.length - 1];
+		globals.mouse_position = { x: last_touch.clientX, y: last_touch.clientY }
 
+	});
 
-    window.addEventListener("resize", (event) => {
-        set_render_offsets_and_scale(globals)
+	function set_menu_open(should_open) {
+		if (should_open) {
+			// Remove hide-menu class from menu holder, which will show the menu
+			elements.menu_items_holder_wrapper.classList.remove("hide-menu");
 
-        if ( window.innerWidth < 800 ) {
-            globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: 1  });
-        } else {
-            globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: Math.max(parseInt(globals.line_length/8), 1)  });
-        }
-    });
+			// Switch the arrow from the open direction to the close direction
+			// This is to ready the arrow to close the menu as the next action
+			// Adds hidden, hiding the open_arrow
+			elements.open_arrow.classList.add("hidden");
+			// Removes hidden, showing the close_arrow
+			elements.close_arrow.classList.remove("hidden");
+		} else {
+			// Adds hide-menu class from menu holder, which will hide the menu
+			elements.menu_items_holder_wrapper.classList.add("hide-menu");
 
-    app.canvas.addEventListener("mousemove", (event) => {
-        globals.mouse_position = {x:event.clientX, y:event.clientY}
-    });
-
-    app.canvas.addEventListener("mouseup", (event) => {
-
-        if (event.button == globals.drag_button) {
-            globals.drag_mode = false
-            globals.still_dragging = false;
-            if (globals.chosen_dragging_vertex != null) {
-                globals.chosen_dragging_vertex.grabbed = false;
-            }
-        }
-        
-        if (event.button == globals.grav_button) {
-            globals.grav_modifier = 1;
-        }
-
-        if (event.button == globals.cut_button) {
-            globals.cut_mode = false;
-        }
-    });
-
-    elements.tearing_checkbox.addEventListener('change', function() {
-        if (this.checked) {
-            globals.tearing = true;
-        } else {
-            globals.tearing = false;
-        }
-    });
-
-    elements.tearing_input.value = globals.tearing_ratio;
-    elements.tearing_input.addEventListener('change', function() {
-        globals.tearing_ratio = this.value;
-    });
-
-    elements.columns_input.value = window.innerWidth < 800 ? constants.DEFAULT_COLUMNS_MOBILE : constants.DEFAULT_COLUMNS;
-
-    elements.rows_input.value = window.innerWidth < 800 ? constants.DEFAULT_ROWS_MOBILE : constants.DEFAULT_ROWS;
-
-    elements.pins_input.value = window.innerWidth < 800 ? constants.DEFAULT_PINS_MOBILE : constants.DEFAULT_PINS;
+			// Switch the arrow from the close direction to the open direction
+			// This is to ready the arrow to open the menu as the next action
+			// Removes hidden, showing the open_arrow
+			elements.open_arrow.classList.remove("hidden");
+			// Adds hidden, hiding the close_arrow
+			elements.close_arrow.classList.add("hidden");
+		}
+	}
 
 
-    elements.build_button.onclick = function() {
-        let columns = parseInt(elements.columns_input.value);
-        let rows = parseInt(elements.rows_input.value);
-        let pins = parseInt(elements.pins_input.value);
-        setup(globals, app, columns, rows, pins);
-    };
+	elements.menu_toggle_button.onclick = function () {
 
-    elements.constraint_itterations_input.value = window.innerWidth < 800 ? 8 : 10;
-    elements.constraint_itterations_input.addEventListener('change', function() {
-        globals.constraint_itterations = this.value;
-    });
+		globals.menu_open = !globals.menu_open;
+		set_menu_open(globals.menu_open);
 
-    elements.show_fps_checkbox.addEventListener('change', function() {
-        if (this.checked) {
-            elements.fps_counter.classList.remove('hidden');
-        } else {
-            elements.fps_counter.classList.add('hidden');
-        }
-    });
 
-    elements.cut_button_selection_dropdown.addEventListener('change', function() {
-        //console.log("cut_button_selection_dropdown:", this.value)
-        if ( this.value == "left-click" ) {
-            globals.cut_button = 0;
-        } else if ( this.value == "middle-click" ) {
-            globals.cut_button = 1;
-        } else if ( this.value == "right-click" ) {
-            globals.cut_button = 2;
-        }
-    });
+	};
 
-    elements.grav_button_selection_dropdown.addEventListener('change', function() {
-        //console.log("grav_button_selection_dropdown:", this.value)
-        if ( this.value == "left-click" ) {
-            globals.grav_button = 0;
-        } else if ( this.value == "middle-click" ) {
-            globals.grav_button = 1;
-        } else if ( this.value == "right-click" ) {
-            globals.grav_button = 2;
-        }
-    });
 
-    elements.drag_button_selection_dropdown.addEventListener('change', function() {
-        //console.log("drag_button_selection_dropdown:", this.value)
-        if ( this.value == "left-click" ) {
-            globals.drag_button = 0;
-        } else if ( this.value == "middle-click" ) {
-            globals.drag_button = 1;
-        } else if ( this.value == "right-click" ) {
-            globals.drag_button = 2;
-        }
-    });
+	app.canvas.addEventListener('contextmenu', event => event.preventDefault());
 
-    function threshold_input_field(){
+	app.canvas.addEventListener("mousedown", (event) => {
 
-        if (elements.columns_input.value > 250) {
-            elements.columns_input.value = 250
-        }
-        if (elements.rows_input.value > 250) {
-            elements.rows_input.value = 250
-        }
-        if (elements.pins_input.value > 250) {
-            elements.pins_input.value = 250
-        }
-    }
+		if (event.button == globals.drag_button) {
+			globals.drag_mode = true;
+			globals.still_dragging = false;
+		}
 
-    elements.columns_input.onkeydown = function(event){
-        if(event.key === 'Enter'){
-            let columns = parseInt(elements.columns_input.value);
-            let rows = parseInt(elements.rows_input.value);
-            let pins = parseInt(elements.pins_input.value);
-            setup(globals, app, columns, rows, pins);
-            threshold_input_field()
-        }
-    };
+		if (event.button == globals.grav_button) {
+			globals.grav_modifier = 10;
+		}
 
-    elements.rows_input.onkeydown = function(event){
-        if(event.key === 'Enter'){
-            let columns = parseInt(elements.columns_input.value);
-            let rows = parseInt(elements.rows_input.value);
-            let pins = parseInt(elements.pins_input.value);
-            setup(globals, app, columns, rows, pins);
-            threshold_input_field()
-        }
-    };
+		if (event.button == globals.cut_button) {
+			globals.cut_mode = true;
+		}
+	});
 
-    elements.pins_input.onkeydown = function(event){
-        if(event.key === 'Enter'){
-            let columns = parseInt(elements.columns_input.value);
-            let rows = parseInt(elements.rows_input.value);
-            let pins = parseInt(elements.pins_input.value);
-            setup(globals, app, columns, rows, pins);
-            threshold_input_field()
-        }
-    };
+
+	window.addEventListener("resize", (event) => {
+		set_render_offsets_and_scale(globals)
+
+		var line_thickness = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.LINE_THICKNESS_MOBILE : constants.LINE_THICKNESS;
+		globals.all_lines_graphics.setStrokeStyle({ color: 0x000000, width: line_thickness });
+	});
+
+	app.canvas.addEventListener("mousemove", (event) => {
+		globals.mouse_position = { x: event.clientX, y: event.clientY }
+	});
+
+	app.canvas.addEventListener("mouseup", (event) => {
+
+		if (event.button == globals.drag_button) {
+			globals.drag_mode = false
+			globals.still_dragging = false;
+			if (globals.chosen_dragging_vertex != null) {
+				globals.chosen_dragging_vertex.grabbed = false;
+			}
+		}
+
+		if (event.button == globals.grav_button) {
+			globals.grav_modifier = 1;
+		}
+
+		if (event.button == globals.cut_button) {
+			globals.cut_mode = false;
+		}
+	});
+
+	elements.tearing_checkbox.addEventListener('change', function () {
+		if (this.checked) {
+			globals.tearing = true;
+		} else {
+			globals.tearing = false;
+		}
+	});
+
+	elements.tearing_input.value = globals.tearing_ratio;
+	elements.tearing_input.addEventListener('change', function () {
+		globals.tearing_ratio = this.value;
+	});
+
+	elements.columns_input.value = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.DEFAULT_COLUMNS_MOBILE : constants.DEFAULT_COLUMNS;
+
+	elements.rows_input.value = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.DEFAULT_ROWS_MOBILE : constants.DEFAULT_ROWS;
+
+	elements.pins_input.value = window.innerWidth < constants.MOBILE_BREAKPOINT ? constants.DEFAULT_PINS_MOBILE : constants.DEFAULT_PINS;
+
+
+	elements.build_button.onclick = function () {
+		let columns = parseInt(elements.columns_input.value);
+		let rows = parseInt(elements.rows_input.value);
+		let pins = parseInt(elements.pins_input.value);
+		setup(globals, app, constants, columns, rows, pins);
+	};
+
+	elements.constraint_itterations_input.value = window.innerWidth < constants.MOBILE_BREAKPOINT ? 8 : 10;
+	elements.constraint_itterations_input.addEventListener('change', function () {
+		globals.constraint_itterations = this.value;
+	});
+
+	elements.show_fps_checkbox.addEventListener('change', function () {
+		if (this.checked) {
+			elements.fps_counter.classList.remove('hidden');
+		} else {
+			elements.fps_counter.classList.add('hidden');
+		}
+	});
+
+	elements.cut_button_selection_dropdown.addEventListener('change', function () {
+		//console.log("cut_button_selection_dropdown:", this.value)
+		if (this.value == "left-click") {
+			globals.cut_button = 0;
+		} else if (this.value == "middle-click") {
+			globals.cut_button = 1;
+		} else if (this.value == "right-click") {
+			globals.cut_button = 2;
+		}
+	});
+
+	elements.grav_button_selection_dropdown.addEventListener('change', function () {
+		//console.log("grav_button_selection_dropdown:", this.value)
+		if (this.value == "left-click") {
+			globals.grav_button = 0;
+		} else if (this.value == "middle-click") {
+			globals.grav_button = 1;
+		} else if (this.value == "right-click") {
+			globals.grav_button = 2;
+		}
+	});
+
+	elements.drag_button_selection_dropdown.addEventListener('change', function () {
+		//console.log("drag_button_selection_dropdown:", this.value)
+		if (this.value == "left-click") {
+			globals.drag_button = 0;
+		} else if (this.value == "middle-click") {
+			globals.drag_button = 1;
+		} else if (this.value == "right-click") {
+			globals.drag_button = 2;
+		}
+	});
+
+	function threshold_input_field() {
+
+		if (elements.columns_input.value > 250) {
+			elements.columns_input.value = 250
+		}
+		if (elements.rows_input.value > 250) {
+			elements.rows_input.value = 250
+		}
+		if (elements.pins_input.value > 250) {
+			elements.pins_input.value = 250
+		}
+	}
+
+	elements.columns_input.onkeydown = function (event) {
+		if (event.key === 'Enter') {
+			let columns = parseInt(elements.columns_input.value);
+			let rows = parseInt(elements.rows_input.value);
+			let pins = parseInt(elements.pins_input.value);
+			setup(globals, app, constants, columns, rows, pins);
+			threshold_input_field()
+		}
+	};
+
+	elements.rows_input.onkeydown = function (event) {
+		if (event.key === 'Enter') {
+			let columns = parseInt(elements.columns_input.value);
+			let rows = parseInt(elements.rows_input.value);
+			let pins = parseInt(elements.pins_input.value);
+			setup(globals, app, constants, columns, rows, pins);
+			threshold_input_field()
+		}
+	};
+
+	elements.pins_input.onkeydown = function (event) {
+		if (event.key === 'Enter') {
+			let columns = parseInt(elements.columns_input.value);
+			let rows = parseInt(elements.rows_input.value);
+			let pins = parseInt(elements.pins_input.value);
+			setup(globals, app, constants, columns, rows, pins);
+			threshold_input_field()
+		}
+	};
 
 
 }
